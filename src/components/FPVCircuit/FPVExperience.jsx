@@ -6,7 +6,7 @@ import { YearCircuit } from './track/YearCircuit';
 import { FPVCamera, LOOK_AHEAD_DISTANCE } from './camera/FPVCamera';
 import { CircuitPostProcessing } from './effects/PostProcessing';
 import { useFPVCircuit } from './FPVCircuitProvider';
-import { useFlightProgress, FlightController, setMaxProgress } from './utils/progress';
+import { useFlightProgress, FlightController, setMaxProgress, setTotalTrackLength } from './utils/progress';
 import { OSDOverlay } from './overlay/OSDOverlay';
 
 const CircuitScene = ({ progress, continuousTrackData, isMobile, flyToNextGate, autoFly, pauseFlight }) => {
@@ -60,6 +60,7 @@ export const FPVExperience = () => {
     const spline = continuousTrackData?.masterSpline;
     if (!spline) return;
     const total = spline.getLength();
+    setTotalTrackLength(total);
     if (total > LOOK_AHEAD_DISTANCE) {
       setMaxProgress((total - LOOK_AHEAD_DISTANCE) / total);
     }

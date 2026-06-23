@@ -8,6 +8,13 @@ let scrollLocked = false;
 // comes to rest with the "TRACK COMPLETE" banner framed ahead, rather than
 // letting the user scroll past the end of the track.
 let globalMaxProgress = 1.02;
+let globalTotalTrackLength = 10000; // fallback
+
+export const setTotalTrackLength = (len) => {
+  if (len && len > 0) {
+    globalTotalTrackLength = len;
+  }
+};
 
 export const setMaxProgress = (m) => {
   globalMaxProgress = m;
@@ -40,8 +47,9 @@ export const useFlightProgress = () => {
 
   useEffect(() => {
     const handleWheel = (e) => {
-      // Very smooth, small delta based on wheel scroll
-      const delta = Math.sign(e.deltaY) * 0.0015;
+      // Constant distance of 80 units per scroll wheel tick
+      const distancePerTick = 80;
+      const delta = Math.sign(e.deltaY) * (distancePerTick / globalTotalTrackLength);
       setTargetProgress(globalTargetProgress + delta);
     };
 
@@ -52,7 +60,9 @@ export const useFlightProgress = () => {
       touchStartY = e.touches[0].clientY;
     };
     const handleTouchMove = (e) => {
-      const delta = Math.sign(touchStartY - e.touches[0].clientY) * 0.0015;
+      // Constant distance of 15 units per touchmove event
+      const distancePerTouch = 15;
+      const delta = Math.sign(touchStartY - e.touches[0].clientY) * (distancePerTouch / globalTotalTrackLength);
       touchStartY = e.touches[0].clientY;
       setTargetProgress(globalTargetProgress + delta);
     };

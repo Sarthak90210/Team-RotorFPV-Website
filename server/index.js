@@ -352,8 +352,8 @@ function getPublicIdFromUrl(url) {
     // Take everything after the version segment (vNNN/) if present; otherwise the whole path.
     const match = afterUpload.match(/v\d+\/(.+)$/);
     const path = match ? match[1] : afterUpload;
-    // Strip the file extension to get the bare public_id.
-    return path.replace(/\.[^/.]+$/, '');
+    // Strip the file extension to get the bare public_id and decode URI components (e.g., %20 to space).
+    return decodeURIComponent(path.replace(/\.[^/.]+$/, ''));
   } catch {
     return null;
   }

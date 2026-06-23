@@ -358,10 +358,16 @@ const Admin = () => {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!formData.title) {
+      alert("Please enter the achievement title before uploading the image.");
+      e.target.value = '';
+      return;
+    }
+
     setIsUploading(true);
     const data = new FormData();
     data.append("image", file);
-    data.append("folder", "achievements");
+    data.append("folder", `achievements/${formData.title.trim().replace(/\s+/g, '-')}`);
 
     try {
       const idToken = await auth.currentUser.getIdToken();
@@ -839,7 +845,7 @@ const Admin = () => {
     setIsUploading(true);
     const data = new FormData();
     data.append("image", file);
-    data.append("folder", "board");
+    data.append("folder", "board/senior-core");
 
     try {
       const idToken = await auth.currentUser.getIdToken();
@@ -895,10 +901,16 @@ const Admin = () => {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!teamMemberFormData.name) {
+      alert("Please enter the team member's name before uploading their photo.");
+      e.target.value = '';
+      return;
+    }
+
     setIsUploading(true);
     const data = new FormData();
     data.append("image", file);
-    data.append("folder", "board");
+    data.append("folder", `board/${teamMemberFormData.name.trim().replace(/\s+/g, '-')}`);
 
     try {
       const idToken = await auth.currentUser.getIdToken();
@@ -936,10 +948,16 @@ const Admin = () => {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!sponsorFormData.name) {
+      alert("Please enter the sponsor's name before uploading their logo.");
+      e.target.value = '';
+      return;
+    }
+
     setIsUploading(true);
     const data = new FormData();
     data.append("image", file);
-    data.append("folder", "sponsor-us");
+    data.append("folder", `sponsor-us/${sponsorFormData.name.trim().replace(/\s+/g, '-')}`);
 
     try {
       const idToken = await auth.currentUser.getIdToken();
@@ -1045,7 +1063,11 @@ const Admin = () => {
     setIsUploading(true);
     const data = new FormData();
     data.append("image", file);
-    data.append("folder", "sponsor-us");
+    if (type === 'teamImage') {
+      data.append("folder", "sponsor-us/team-image");
+    } else {
+      data.append("folder", "sponsor-us");
+    }
 
     try {
       const idToken = await auth.currentUser.getIdToken();
