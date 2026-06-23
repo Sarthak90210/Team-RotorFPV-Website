@@ -1,16 +1,28 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getGlobalProgress } from '../utils/progress';
+
+// World-space distance (in track units) the camera looks ahead of itself.
+// Matches the spacing between loops in TrackGenerator (spacingZ = 250) so that,
+// at the instant the drone passes through the last loop before an achievement,
+// the camera is aimed exactly at that achievement (perfectly centered). It also
+// makes the camera yaw/bank toward the next loop like a real drone chasing gates.
+export const LOOK_AHEAD_DISTANCE = 250;
 
 export const FPVCamera = ({ spline }) => {
   const targetLookAt = useRef(new THREE.Vector3());
   const currentPos = useRef(new THREE.Vector3());
   const currentLookAt = useRef(new THREE.Vector3());
-  
+
   // Track total target rotations for tricks
   const targetBank = useRef(0);
   const targetPitch = useRef(0);
+
+  // Total arc length of the spline, computed once. Used to convert the fixed
+  // world-space look-ahead distance into the normalized [0,1] curve parameter,
+  // so anticipation stays consistent regardless of total track length.
+  const totalLength = useMemo(() => (spline ? spline.getLength() : 1), [spline]);
 
   useFrame((state, delta) => {
     if (!spline) return;
@@ -22,8 +34,9 @@ export const FPVCamera = ({ spline }) => {
     const splinePos = spline.getPointAt(p);
     const tangent = spline.getTangentAt(p);
     
-    // Look-ahead calculation
-    const lookAheadU = Math.min(p + 0.02, 1); // Sample slightly ahead
+    // Look-ahead calculation: aim a fixed world-distance ahead along the track,
+    // so the camera turns to face the next loop in its direction of travel.
+    const lookAheadU = Math.min(p + LOOK_AHEAD_DISTANCE / totalLength, 1);
     const lookAheadPos = spline.getPointAt(lookAheadU);
     
     // Add banking (roll) based on how sharp the curve is turning

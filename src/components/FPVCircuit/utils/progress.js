@@ -4,10 +4,18 @@ import { useFrame } from '@react-three/fiber';
 let globalTargetProgress = 0;
 let globalCurrentProgress = 0;
 let scrollLocked = false;
+// Upper bound for scroll progress. Lowered by the experience so the camera
+// comes to rest with the "TRACK COMPLETE" banner framed ahead, rather than
+// letting the user scroll past the end of the track.
+let globalMaxProgress = 1.02;
+
+export const setMaxProgress = (m) => {
+  globalMaxProgress = m;
+};
 
 export const setTargetProgress = (p) => {
   if (scrollLocked) return;
-  globalTargetProgress = Math.max(-0.02, Math.min(p, 1.02));
+  globalTargetProgress = Math.max(-0.02, Math.min(p, globalMaxProgress));
 };
 
 export const lockScroll = (duration) => {

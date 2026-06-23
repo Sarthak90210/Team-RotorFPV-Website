@@ -1,12 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { generateContinuousTrack } from './track/TrackGenerator';
 import { YearCircuit } from './track/YearCircuit';
-import { FPVCamera } from './camera/FPVCamera';
+import { FPVCamera, LOOK_AHEAD_DISTANCE } from './camera/FPVCamera';
 import { CircuitPostProcessing } from './effects/PostProcessing';
 import { useFPVCircuit } from './FPVCircuitProvider';
-import { useFlightProgress, FlightController } from './utils/progress';
+import { useFlightProgress, FlightController, setMaxProgress } from './utils/progress';
 import { OSDOverlay } from './overlay/OSDOverlay';
 
 const CircuitScene = ({ progress, continuousTrackData, isMobile, flyToNextGate, autoFly, pauseFlight }) => {
@@ -52,6 +52,19 @@ export const FPVExperience = () => {
     if (!yearCircuits || yearCircuits.length === 0) return null;
     return generateContinuousTrack(yearCircuits);
   }, [yearCircuits]);
+
+  // Clamp the maximum scroll so the camera rests one look-ahead distance short of
+  // the spline's end, keeping the TRACK COMPLETE banner centered ahead and
+  // preventing the user from scrolling past it.
+  useEffect(() => {
+    const spline = continuousTrackData?.masterSpline;
+    if (!spline) return;
+    const total = spline.getLength();
+    if (total > LOOK_AHEAD_DISTANCE) {
+      setMaxProgress((total - LOOK_AHEAD_DISTANCE) / total);
+    }
+    return () => setMaxProgress(1.02); // restore default if the track changes/unmounts
+  }, [continuousTrackData]);
 
   return (
     <>

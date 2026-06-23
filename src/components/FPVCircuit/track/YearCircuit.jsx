@@ -1,5 +1,5 @@
 import React from 'react';
-import { YearMonument, NextYearPreview } from './AchievementPedestal';
+import { YearMonument, TrackComplete } from './AchievementPedestal';
 import { AchievementGate } from '../gates/AchievementGate';
 import { RaceGate } from '../pillars/RaceGate';
 import { GuideArrow } from './GuideArrow';
@@ -39,9 +39,9 @@ export const YearCircuit = ({ yearData, startPos }) => {
         <GuideArrow key={arrowData.id} data={arrowData} />
       ))}
 
-      {/* End Markers */}
+      {/* End Marker: only present on the final (oldest) year's last segment */}
       {finalPosition && (
-        <NextYearPreview year={parseInt(year) - 1} position={finalPosition} />
+        <TrackComplete position={finalPosition} />
       )}
     </group>
   );

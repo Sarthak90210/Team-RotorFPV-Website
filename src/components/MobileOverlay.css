@@ -20,8 +20,10 @@
     display: flex; /* Visible on mobile */
   }
 
-  /* Prevent scrolling on the body when overlay is active */
-  body {
+  /* Prevent scrolling on the body ONLY while the overlay is actually rendered.
+     The overlay is currently disabled in App.jsx, so without this scoping the
+     lock would block scrolling on every page on mobile. */
+  body:has(.mobile-overlay-container) {
     overflow: hidden !important;
   }
 }

@@ -87,20 +87,6 @@ export const generateContinuousTrack = (yearCircuits) => {
       });
       currentZ -= spacingZ;
       checkpointIndex++;
-
-      // Force a straight exit by adding an invisible or visible gate with the exact same X/Y
-      // We'll just add a straight filler gate after the achievement to ensure the spline stays dead straight!
-      checkpoints.push({
-        type: 'gate',
-        id: `gate-post-${yearIndex}-${checkpointIndex}`,
-        worldPosition: new THREE.Vector3(
-          startPos.x + achXOffset,
-          startPos.y + achYOffset,
-          currentZ
-        )
-      });
-      currentZ -= spacingZ;
-      checkpointIndex++;
     });
 
     // Pass through every checkpoint
@@ -150,9 +136,14 @@ export const generateContinuousTrack = (yearCircuits) => {
       currentZ = nextYearStartPos.z; // Set up Z for the next year!
 
     } else {
-      // Final Rise (for end of all records)
-      finalPosition = exitPos.clone().add(new THREE.Vector3(0, 30, -80));
-      masterPoints.push(finalPosition.clone()); 
+      // Final Rise, then a straight run-up. The TRACK COMPLETE banner sits at the
+      // very end of the spline; the experience clamps max scroll to one look-ahead
+      // distance short of it, so the banner rests centered ahead and can't be flown past.
+      const risePos = exitPos.clone().add(new THREE.Vector3(0, 30, -80));
+      masterPoints.push(risePos.clone());
+
+      finalPosition = risePos.clone().add(new THREE.Vector3(0, 0, -400));
+      masterPoints.push(finalPosition.clone());
     }
 
     allIslandsData.push({

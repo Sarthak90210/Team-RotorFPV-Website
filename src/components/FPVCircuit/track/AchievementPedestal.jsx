@@ -68,20 +68,21 @@ export const YearMonument = ({ year, position }) => {
   );
 };
 
-export const NextYearPreview = ({ year, position }) => {
-  // A simple plain line of text
+export const TrackComplete = ({ position }) => {
+  // Shown at the very end of the track, once every year's achievements have been
+  // flown through and there are no prior years left to visit.
   return (
     <group position={[position.x, position.y + 15, position.z]}>
       <Text
         position={[0, 0, 0]}
-        fontSize={24}
+        fontSize={32}
         color="#E5E7EB"
         anchorX="center"
         anchorY="middle"
         letterSpacing={0.1}
         font="https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff"
       >
-        GOING TO {year}
+        TRACK COMPLETE
       </Text>
     </group>
   );
