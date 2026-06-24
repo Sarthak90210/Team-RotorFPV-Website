@@ -63,7 +63,7 @@ const ContactMessagesAdmin = () => {
   }
 
   return (
-    <div className="contact-admin-container fade-in">
+    <div className="contact-admin-container fade-in admin-full">
       <div className="contact-admin-header">
         <h2>Contact Messages {unreadCount > 0 && <span className="unread-badge">{unreadCount} New</span>}</h2>
         

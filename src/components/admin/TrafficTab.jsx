@@ -82,7 +82,7 @@ const TrafficTab = () => {
   const maxCountry = data?.byCountry?.[0]?.count || 1;
 
   return (
-    <div className="traffic-tab">
+    <div className="traffic-tab admin-full">
       <div className="admin-glass-panel">
         <div className="traffic-header">
           <h2>Website Traffic</h2>
@@ -91,7 +91,7 @@ const TrafficTab = () => {
           </button>
         </div>
 
-        {error && <p className="empty-state" style={{ color: '#f87171' }}>{error}</p>}
+        {error && <p className="empty-state text-error">{error}</p>}
 
         {loading && !data && <div className="loading-spinner">Loading traffic data…</div>}
 

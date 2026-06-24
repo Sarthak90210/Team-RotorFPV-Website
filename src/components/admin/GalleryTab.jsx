@@ -197,7 +197,7 @@ const GalleryTab = () => {
   };
 
   return (
-    <>
+    <div className="admin-grid">
       <div className="admin-left-column">
         <div className="admin-glass-panel form-panel">
           <h2>Gallery Scroll Animation Image</h2>
@@ -310,7 +310,7 @@ const GalleryTab = () => {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

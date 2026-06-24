@@ -106,7 +106,7 @@ const AdminsTab = ({ user }) => {
   };
 
   return (
-    <>
+    <div className="admin-grid">
       <div className="admin-left-column">
         <div className="admin-glass-panel form-panel">
           <h2>Grant Admin Access</h2>
@@ -169,7 +169,7 @@ const AdminsTab = ({ user }) => {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

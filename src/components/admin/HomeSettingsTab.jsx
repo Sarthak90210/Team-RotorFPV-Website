@@ -101,12 +101,12 @@ const HomeSettingsTab = ({ user }) => {
   };
 
   return (
-    <div className="admin-left-column" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+    <div className="admin-single">
       <div className="admin-glass-panel form-panel">
         <h2>Home Page Settings</h2>
 
         <div className="settings-section">
-          <h3>Background Video</h3>
+          <h3 className="admin-subhead">Background Video</h3>
           <p className="field-hint">
             This video plays in the background of the main home page.
             Recommended size: &lt; 10MB. Maximum size: 20MB.
@@ -115,14 +115,16 @@ const HomeSettingsTab = ({ user }) => {
           <form onSubmit={handleHomeVideoSubmit} className="admin-form">
             <div className="form-group">
               <label>Upload New Video</label>
-              <input
-                type="file"
-                accept="video/mp4,video/webm,video/quicktime"
-                onChange={handleHomeVideoUpload}
-                ref={homeVideoInputRef}
-                disabled={isUploading}
-              />
-              {isUploading && <p className="uploading-text">Uploading video, please wait... (this may take a moment)</p>}
+              <div className="file-upload">
+                <input
+                  type="file"
+                  accept="video/mp4,video/webm,video/quicktime"
+                  onChange={handleHomeVideoUpload}
+                  ref={homeVideoInputRef}
+                  disabled={isUploading}
+                />
+                {isUploading && <span className="upload-status">Uploading…</span>}
+              </div>
             </div>
 
             <div className="input-divider">or</div>
@@ -137,10 +139,10 @@ const HomeSettingsTab = ({ user }) => {
               />
             </div>
 
-            <div className="video-preview-container" style={{ marginTop: '20px', borderRadius: '8px', overflow: 'hidden' }}>
-              <p className="field-hint">
-                Preview ({homeVideoUrl ? 'Custom Video' : 'Default Video'}):
-              </p>
+            <p className="field-hint stack-md">
+              Preview ({homeVideoUrl ? 'Custom Video' : 'Default Video'}):
+            </p>
+            <div className="video-preview">
               <video
                 key={homeVideoUrl || '/TRFPV_Assets/Teamvideo.mp4'}
                 src={homeVideoUrl || '/TRFPV_Assets/Teamvideo.mp4'}
@@ -148,11 +150,10 @@ const HomeSettingsTab = ({ user }) => {
                 loop
                 muted
                 playsInline
-                style={{ width: '100%', maxHeight: '300px', objectFit: 'cover', borderRadius: '8px' }}
               />
             </div>
 
-            <div className="form-actions" style={{ marginTop: '30px' }}>
+            <div className="form-actions">
               <button type="submit" className="admin-btn primary" disabled={isUploading || !homeVideoUrl}>
                 Save Video Setting
               </button>
@@ -165,7 +166,7 @@ const HomeSettingsTab = ({ user }) => {
           </form>
 
           {homeSettings?.updatedAt && (
-            <p className="field-hint" style={{ marginTop: '20px', fontSize: '0.8rem' }}>
+            <p className="field-hint stack-md">
               Last updated: {homeSettings.updatedAt.toDate ? homeSettings.updatedAt.toDate().toLocaleString() : 'Recently'}
               {homeSettings.updatedBy && ` by ${homeSettings.updatedBy}`}
             </p>

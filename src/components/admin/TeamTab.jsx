@@ -251,7 +251,7 @@ const TeamTab = () => {
   const selectedYearDoc = teamYearsData.find(y => y.year === selectedTeamYear);
 
   return (
-    <>
+    <div className="admin-grid">
       <div className="admin-left-column">
         <div className="admin-glass-panel form-panel">
           <h2>Manage Years</h2>
@@ -283,14 +283,14 @@ const TeamTab = () => {
               {selectedYearDoc?.seniorCorePhoto ? (
                 <div className="image-preview achievement">
                   <img src={selectedYearDoc.seniorCorePhoto} alt="Senior Core" />
-                  <div style={{ marginTop: '10px' }}>
+                  <div className="stack-sm">
                     <button type="button" onClick={handleDeleteSeniorCore} className="admin-btn delete small">Delete Photo</button>
                   </div>
                 </div>
               ) : (
                 <p className="empty-text">No Senior Core photo uploaded for this year.</p>
               )}
-              <div className="form-group" style={{ marginTop: '20px' }}>
+              <div className="form-group stack-md">
                 <label>Upload New Photo</label>
                 <div className="file-upload">
                   <input
@@ -472,7 +472,7 @@ const TeamTab = () => {
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 };
 
