@@ -9,6 +9,7 @@ import SponsorsTab from '../components/admin/SponsorsTab';
 import AdminsTab from '../components/admin/AdminsTab';
 import TrafficTab from '../components/admin/TrafficTab';
 import ContactMessagesAdmin from '../components/ContactMessagesAdmin';
+import PillNav from '../components/PillNav';
 import './Admin.css';
 
 const TABS = [
@@ -134,15 +135,11 @@ const Admin = () => {
       </div>
 
       <div className="admin-tabs">
-        {visibleTabs.map(tab => (
-          <button
-            key={tab.key}
-            className={`admin-tab ${activeTab === tab.key ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+        <PillNav
+          items={visibleTabs.map(tab => ({ key: tab.key, label: tab.label }))}
+          activeKey={activeTab}
+          onItemClick={setActiveTab}
+        />
       </div>
 
       <div className="admin-content">
