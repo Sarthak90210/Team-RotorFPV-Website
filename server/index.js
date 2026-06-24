@@ -3,7 +3,7 @@ import cors from 'cors';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { Resend } from 'resend';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import geoip from 'geoip-lite';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -34,12 +34,44 @@ const db = getFirestore();
 
 const app = express();
 
-// Behind a reverse proxy (Render/Railway/Vercel), the real client IP arrives in
-// the X-Forwarded-For header — the raw socket address is the proxy's. Trust one
-// hop so req.ip resolves to the actual visitor. Without this, every request keys
-// to the proxy IP: rate limiters share a single bucket and visit logs are useless.
-// '1' (one hop) is deliberate — `true` would trust a spoofable client-set header.
-app.set('trust proxy', 1);
+// Behind a reverse proxy, the real client IP arrives in the X-Forwarded-For
+// header — the raw socket address is the proxy's. Trust the chain so Express
+// parses XFF; we then extract the IP ourselves via getClientIp() below.
+app.set('trust proxy', true);
+
+// Normalize an IPv6-mapped IPv4 address (::ffff:1.2.3.4 -> 1.2.3.4).
+const normalizeIp = (ip) => (ip || '').replace(/^::ffff:/, '').trim();
+
+// Private / loopback / link-local ranges that are never a real public visitor.
+const PRIVATE_IP_RE = /^(?:10\.|127\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|::1$|f[cd])/i;
+
+// Resolve the real client IP. Cloud platforms often chain SEVERAL internal
+// proxies, so X-Forwarded-For looks like:
+//   "<real client public IP>, 10.x.x.x, 10.x.x.x"
+// and the count of internal hops varies per request — so a fixed `trust proxy`
+// hop number can't reliably point at the visitor.
+function getClientIp(req) {
+  // 1) Platform-specific "real client" headers win — they carry the original
+  //    visitor IP even when X-Forwarded-For is full of internal hops.
+  const directHeaders = ['cf-connecting-ip', 'true-client-ip', 'x-real-ip', 'fly-client-ip'];
+  for (const header of directHeaders) {
+    const value = normalizeIp(req.headers[header]);
+    if (value && !PRIVATE_IP_RE.test(value)) return value;
+  }
+
+  // 2) Otherwise scan the X-Forwarded-For chain for the first PUBLIC address,
+  //    which is the original visitor regardless of how many private hops follow.
+  const xff = req.headers['x-forwarded-for'];
+  if (typeof xff === 'string' && xff.length > 0) {
+    const chain = xff.split(',').map(normalizeIp).filter(Boolean);
+    const publicIp = chain.find((ip) => !PRIVATE_IP_RE.test(ip));
+    if (publicIp) return publicIp;
+    if (chain.length > 0) return chain[0];
+  }
+
+  // 3) Last resort: the socket address Express resolved.
+  return normalizeIp(req.ip);
+}
 
 const allowedOrigins = [
   'http://localhost:5173',
@@ -323,6 +355,8 @@ const uploadLimiter = rateLimit({
   message: { error: 'Too many uploads. Please wait before uploading more files.' },
   standardHeaders: true,
   legacyHeaders: false,
+  // Key on the real visitor IP (parsed from the forwarded chain), not req.ip.
+  keyGenerator: (req) => ipKeyGenerator(getClientIp(req)),
 });
 
 // ── Image upload endpoint (admin-only, signed Cloudinary upload) ──
@@ -448,7 +482,8 @@ const CONTACT_RECIPIENTS = (process.env.CONTACT_RECIPIENTS || '')
 const contactLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // Limit each IP to 5 contact requests per window
-  message: { error: 'Too many requests, please try again later.' }
+  message: { error: 'Too many requests, please try again later.' },
+  keyGenerator: (req) => ipKeyGenerator(getClientIp(req)),
 });
 
 app.post('/api/contact', contactLimiter, async (req, res) => {
@@ -486,7 +521,7 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
       message,
       createdAt: new Date(),
       status: 'unread',
-      ipAddress: req.ip || req.connection?.remoteAddress || '',
+      ipAddress: getClientIp(req),
       repliedAt: null
     };
 
@@ -536,22 +571,20 @@ ${submissionDate} IST`;
 });
 
 // ── Visitor Analytics ──
-// Public endpoint the frontend pings on each page view. The real client IP comes
-// from req.ip (correct because of `app.set('trust proxy', 1)` above); we resolve
-// a coarse location offline with geoip-lite — no external API call, no API key.
-// Writes go through the Admin SDK, so the 'visits' collection stays fully locked
-// down by the default-deny Firestore rule (clients can neither read nor write it).
+// Public endpoint the frontend pings on each page view. The real client IP is
+// resolved by getClientIp() (first public address in the forwarded chain); we
+// then look up a coarse location offline with geoip-lite — no external API call,
+// no API key. Writes go through the Admin SDK, so the 'visits' collection stays
+// fully locked down by the default-deny Firestore rule (no client read/write).
 const trackLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 30,             // cap pageview spam per IP
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(getClientIp(req)),
   // Analytics is best-effort: swallow over-limit pings instead of erroring.
   handler: (req, res) => res.status(204).end(),
 });
-
-// Normalize an IPv6-mapped IPv4 address (::ffff:1.2.3.4 -> 1.2.3.4) for geo lookup.
-const normalizeIp = (ip) => (ip || '').replace(/^::ffff:/, '');
 
 app.post('/api/track', trackLimiter, async (req, res) => {
   try {
@@ -562,7 +595,7 @@ app.post('/api/track', trackLimiter, async (req, res) => {
       return res.status(204).end();
     }
 
-    const ip = normalizeIp(req.ip);
+    const ip = getClientIp(req);
     const path = typeof req.body?.path === 'string' ? req.body.path.slice(0, 200) : '/';
     const geo = geoip.lookup(ip) || null;
 
