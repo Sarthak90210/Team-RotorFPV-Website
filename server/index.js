@@ -4,6 +4,7 @@ import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { Resend } from 'resend';
 import rateLimit from 'express-rate-limit';
+import geoip from 'geoip-lite';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -33,6 +34,13 @@ const db = getFirestore();
 
 const app = express();
 
+// Behind a reverse proxy (Render/Railway/Vercel), the real client IP arrives in
+// the X-Forwarded-For header — the raw socket address is the proxy's. Trust one
+// hop so req.ip resolves to the actual visitor. Without this, every request keys
+// to the proxy IP: rate limiters share a single bucket and visit logs are useless.
+// '1' (one hop) is deliberate — `true` would trust a spoofable client-set header.
+app.set('trust proxy', 1);
+
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
@@ -41,15 +49,30 @@ const allowedOrigins = [
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
+// Vercel preview URLs for THIS project only.
+// Pattern: https://team-rotor-fpv-website-<hash>-<team>.vercel.app
+// Set VERCEL_PROJECT_NAME in server/.env to your Vercel project slug (e.g. "team-rotor-fpv-website").
+const VERCEL_PROJECT_NAME = process.env.VERCEL_PROJECT_NAME || '';
+
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like server-to-server or curl)
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (server-to-server, curl, Postman)
+    if (!origin) {
       return callback(null, true);
     }
-    
-    // Allow dynamic Vercel preview URLs (e.g., https://project-123.vercel.app)
-    if (origin.startsWith('https://') && origin.endsWith('.vercel.app')) {
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow Vercel preview deployments scoped to this project only.
+    // Requires VERCEL_PROJECT_NAME to be set; otherwise this check is skipped.
+    if (
+      VERCEL_PROJECT_NAME &&
+      /^https:\/\//.test(origin) &&
+      origin.endsWith('.vercel.app') &&
+      origin.toLowerCase().includes(VERCEL_PROJECT_NAME.toLowerCase())
+    ) {
       return callback(null, true);
     }
 
@@ -290,8 +313,20 @@ app.get('/api/admins', verifyAdmin, async (req, res) => {
   }
 });
 
+// ── Upload rate limiter: 20 uploads per 10 minutes per IP ──
+// This caps memory pressure from concurrent large-file uploads.
+// Placed before Multer so rate-limited requests are rejected before
+// any file bytes are buffered into RAM.
+const uploadLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 20,
+  message: { error: 'Too many uploads. Please wait before uploading more files.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ── Image upload endpoint (admin-only, signed Cloudinary upload) ──
-app.post('/api/upload', verifyAdmin, upload.single('image'), async (req, res) => {
+app.post('/api/upload', verifyAdmin, uploadLimiter, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -402,6 +437,14 @@ app.post('/api/delete-asset', verifyAdmin, async (req, res) => {
 // ── Contact Us Endpoint ──
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// Verified sender on the team's domain; override via env if the domain changes.
+const CONTACT_FROM = process.env.CONTACT_FROM || 'Team RotorFPV <contact@teamrotorfpv.com>';
+// Comma-separated list of recipients, e.g. "teamrotorfpv@vit.ac.in,backup@example.com".
+const CONTACT_RECIPIENTS = (process.env.CONTACT_RECIPIENTS || '')
+  .split(',')
+  .map((addr) => addr.trim())
+  .filter(Boolean);
+
 const contactLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // Limit each IP to 5 contact requests per window
@@ -464,42 +507,147 @@ ${message}
 Submitted on:
 ${submissionDate} IST`;
 
-    // Send Email via Resend
-    if (process.env.RESEND_API_KEY) {
-      // 1. Send to personal verified email (Will succeed immediately)
-      const { data, error } = await resend.emails.send({
-        from: 'Team RotorFPV <contact@teamrotorfpv.com>',
-        to: 'sarthakkhubchandanik@gmail.com', 
+    // Send notification email via Resend.
+    // Best-effort only: the message is already persisted to Firestore above and is
+    // visible in the admin dashboard, so an email failure must NOT fail the request
+    // (that would make users resubmit and create duplicate entries).
+    if (process.env.RESEND_API_KEY && CONTACT_RECIPIENTS.length > 0) {
+      const { error } = await resend.emails.send({
+        from: CONTACT_FROM,
+        to: CONTACT_RECIPIENTS,
         subject: '[Team RotorFPV Website] New Contact Form Submission',
         text: emailBody
       });
-      
+
       if (error) {
-        console.error("Resend API Error (Personal):", error);
-        return res.status(500).json({ success: false, error: 'Failed to send email notification: ' + error.message });
+        console.error("Resend API Error:", error.message || error);
+      } else {
+        console.log(`Contact notification email sent to ${CONTACT_RECIPIENTS.length} recipient(s).`);
       }
-
-      // 2. Send to Official Email
-      const officialResponse = await resend.emails.send({
-        from: 'Team RotorFPV <contact@teamrotorfpv.com>',
-        to: 'teamrotorfpv@vit.ac.in',
-        subject: '[Team RotorFPV Website] New Contact Form Submission',
-        text: emailBody
-      });
-      
-      if (officialResponse.error) {
-        console.warn("Resend API Error (Official Email):", officialResponse.error.message, "- This is expected until your domain is verified.");
-      }
-
-      console.log("Email processing complete.");
     } else {
-      console.warn("RESEND_API_KEY is not set in environment variables. Email notification was not sent.");
+      console.warn("RESEND_API_KEY or CONTACT_RECIPIENTS not set; skipping email notification.");
     }
 
     res.status(200).json({ success: true, message: 'Message sent successfully.' });
   } catch (error) {
     console.error('Error handling contact form:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// ── Visitor Analytics ──
+// Public endpoint the frontend pings on each page view. The real client IP comes
+// from req.ip (correct because of `app.set('trust proxy', 1)` above); we resolve
+// a coarse location offline with geoip-lite — no external API call, no API key.
+// Writes go through the Admin SDK, so the 'visits' collection stays fully locked
+// down by the default-deny Firestore rule (clients can neither read nor write it).
+const trackLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30,             // cap pageview spam per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Analytics is best-effort: swallow over-limit pings instead of erroring.
+  handler: (req, res) => res.status(204).end(),
+});
+
+// Normalize an IPv6-mapped IPv4 address (::ffff:1.2.3.4 -> 1.2.3.4) for geo lookup.
+const normalizeIp = (ip) => (ip || '').replace(/^::ffff:/, '');
+
+app.post('/api/track', trackLimiter, async (req, res) => {
+  try {
+    const ua = (req.headers['user-agent'] || '').slice(0, 300);
+
+    // Skip obvious bots/crawlers so the numbers reflect real humans.
+    if (/bot|crawl|spider|slurp|bingpreview|facebookexternalhit|headless/i.test(ua)) {
+      return res.status(204).end();
+    }
+
+    const ip = normalizeIp(req.ip);
+    const path = typeof req.body?.path === 'string' ? req.body.path.slice(0, 200) : '/';
+    const geo = geoip.lookup(ip) || null;
+
+    await db.collection('visits').add({
+      ip,
+      path,
+      userAgent: ua,
+      country: geo?.country || null, // ISO-2 country code, e.g. "IN"
+      region: geo?.region || null,
+      city: geo?.city || null,
+      ll: geo?.ll || null,           // [latitude, longitude]
+      timestamp: new Date(),
+    });
+
+    res.status(204).end();
+  } catch (error) {
+    // Tracking must never break a page load — log and move on.
+    console.error('Visit tracking error:', error.message || error);
+    res.status(204).end();
+  }
+});
+
+// Admin-only analytics summary for the dashboard Traffic tab.
+// Accurate lifetime total comes from a cheap count() aggregation; the breakdowns
+// (unique IPs, country split, recent feed) are computed over the most recent
+// ANALYTICS_SCAN_LIMIT visits to keep per-request reads bounded.
+const ANALYTICS_SCAN_LIMIT = 2000;
+
+app.get('/api/analytics', verifyAdmin, async (req, res) => {
+  try {
+    const [countSnap, snap] = await Promise.all([
+      db.collection('visits').count().get(),
+      db.collection('visits').orderBy('timestamp', 'desc').limit(ANALYTICS_SCAN_LIMIT).get(),
+    ]);
+
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+
+    const uniqueIps = new Set();
+    const countryCounts = {};
+    const recent = [];
+    let last24h = 0;
+    let last7d = 0;
+
+    snap.forEach((doc) => {
+      const v = doc.data();
+      const ts = v.timestamp?.toDate ? v.timestamp.toDate() : new Date(v.timestamp);
+      const age = now - ts.getTime();
+
+      if (v.ip) uniqueIps.add(v.ip);
+      if (age <= DAY) last24h += 1;
+      if (age <= 7 * DAY) last7d += 1;
+
+      const country = v.country || 'Unknown';
+      countryCounts[country] = (countryCounts[country] || 0) + 1;
+
+      if (recent.length < 100) {
+        recent.push({
+          ip: v.ip || '',
+          city: v.city || '',
+          region: v.region || '',
+          country,
+          path: v.path || '',
+          timestamp: ts.toISOString(),
+        });
+      }
+    });
+
+    const byCountry = Object.entries(countryCounts)
+      .map(([country, count]) => ({ country, count }))
+      .sort((a, b) => b.count - a.count);
+
+    res.json({
+      totalVisits: countSnap.data().count,
+      scannedWindow: snap.size,           // breakdowns below are over this many recent visits
+      windowCapped: snap.size === ANALYTICS_SCAN_LIMIT,
+      uniqueVisitors: uniqueIps.size,
+      last24h,
+      last7d,
+      byCountry,
+      recent,
+    });
+  } catch (error) {
+    console.error('Analytics error:', error);
+    res.status(500).json({ error: 'Failed to load analytics' });
   }
 });
 
