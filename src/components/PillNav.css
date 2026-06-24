@@ -1,0 +1,133 @@
+/* PillNav (tab variant) — adapted from React Bits PillNav.
+   Inline tab bar themed to the admin dashboard, not a floating site nav. */
+
+.pill-nav-container {
+  position: relative;
+  width: 100%;
+}
+
+.pill-nav {
+  --nav-h: 44px;
+  --pill-pad-x: 16px;
+  --pill-gap: 4px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* The rounded bar that holds the pills. Decoupled from --base so the accent
+   (used by the hover circle / active dot) doesn't tint the whole bar. */
+.pill-nav-items {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--nav-h);
+  background: var(--glass-bg, rgba(10, 25, 47, 0.6));
+  border: 1px solid var(--glass-border, rgba(100, 255, 218, 0.15));
+  border-radius: 9999px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none; /* Firefox */
+}
+
+.pill-nav-items::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.pill-list {
+  list-style: none;
+  display: flex;
+  align-items: stretch;
+  gap: var(--pill-gap);
+  margin: 0;
+  padding: 4px;
+  height: 100%;
+}
+
+.pill-list > li {
+  display: flex;
+  height: 100%;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 var(--pill-pad-x);
+  background: var(--pill-bg, transparent);
+  color: var(--pill-text, #8892b0);
+  border: none;
+  appearance: none;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 0;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-radius: 9999px;
+  box-sizing: border-box;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.pill .hover-circle {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  border-radius: 50%;
+  background: var(--base, #64ffda);
+  z-index: 1;
+  display: block;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.pill .label-stack {
+  position: relative;
+  display: inline-block;
+  line-height: 1;
+  z-index: 2;
+}
+
+.pill .pill-label {
+  position: relative;
+  z-index: 2;
+  display: inline-block;
+  line-height: 1;
+  will-change: transform;
+}
+
+.pill .pill-label-hover {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--hover-text, #0a192f);
+  z-index: 3;
+  display: inline-block;
+  will-change: transform, opacity;
+}
+
+/* Active tab: accent tint + accent text, with a small dot underneath. */
+.pill.is-active {
+  background: rgba(100, 255, 218, 0.12);
+  color: var(--base, #64ffda);
+}
+
+.pill.is-active::after {
+  content: '';
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  background: var(--base, #64ffda);
+  border-radius: 50%;
+  z-index: 4;
+}

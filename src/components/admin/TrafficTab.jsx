@@ -159,7 +159,7 @@ const TrafficTab = () => {
                             <td>{formatTime(v.timestamp)}</td>
                             <td>
                               <span className="visit-flag">{flagEmoji(v.country)}</span>
-                              {[v.city, v.region, countryName(v.country)]
+                              {[v.region, countryName(v.country)]
                                 .filter(Boolean)
                                 .filter((x) => x !== 'Unknown')
                                 .join(', ') || 'Unknown'}
