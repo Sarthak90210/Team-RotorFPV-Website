@@ -123,7 +123,7 @@ const AchievementsTab = () => {
   };
 
   return (
-    <>
+    <div className="admin-grid">
       <div className="admin-left-column">
         <div className="admin-glass-panel form-panel">
           <h2>{editingId ? 'Edit Achievement' : 'Add New Achievement'}</h2>
@@ -239,7 +239,7 @@ const AchievementsTab = () => {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

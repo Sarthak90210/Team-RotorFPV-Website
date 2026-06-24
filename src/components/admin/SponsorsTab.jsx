@@ -220,8 +220,8 @@ const SponsorsTab = ({ user }) => {
   };
 
   return (
-    <>
-      <div style={{ gridColumn: '1 / -1', marginBottom: '20px' }}>
+    <div className="admin-grid">
+      <div className="admin-span-full">
         <div className="admin-glass-panel form-panel">
           <h2>Sponsors Page Settings</h2>
           <form onSubmit={handleSponsorSettingsSubmit} className="admin-form">
@@ -247,8 +247,8 @@ const SponsorsTab = ({ user }) => {
                   disabled={isUploading}
                 />
                 {sponsorPageSettings.teamImage?.url && (
-                  <div className="image-preview" style={{ marginTop: '10px' }}>
-                    <img src={sponsorPageSettings.teamImage.url} alt="Team" style={{ maxHeight: '100px', borderRadius: '8px' }} />
+                  <div className="image-preview achievement stack-sm">
+                    <img src={sponsorPageSettings.teamImage.url} alt="Team" />
                   </div>
                 )}
               </div>
@@ -262,9 +262,9 @@ const SponsorsTab = ({ user }) => {
                   disabled={isUploading}
                 />
                 {sponsorPageSettings.brochure?.url && (
-                  <div style={{ marginTop: '10px' }}>
-                    <p style={{ fontSize: '0.85rem', marginBottom: '5px' }}>Current: {sponsorPageSettings.brochure.name || 'Brochure PDF'}</p>
-                    <a href={sponsorPageSettings.brochure.url} target="_blank" rel="noreferrer" style={{ color: '#a0c4e8', textDecoration: 'underline' }}>Preview PDF</a>
+                  <div className="stack-sm">
+                    <p className="field-hint">Current: {sponsorPageSettings.brochure.name || 'Brochure PDF'}</p>
+                    <a href={sponsorPageSettings.brochure.url} target="_blank" rel="noreferrer" className="file-link">Preview PDF</a>
                   </div>
                 )}
               </div>
@@ -316,17 +316,15 @@ const SponsorsTab = ({ user }) => {
               />
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Order</label>
-                <input
-                  type="number"
-                  name="order"
-                  value={sponsorFormData.order}
-                  onChange={handleSponsorInputChange}
-                  required
-                />
-              </div>
+            <div className="form-group">
+              <label>Order</label>
+              <input
+                type="number"
+                name="order"
+                value={sponsorFormData.order}
+                onChange={handleSponsorInputChange}
+                required
+              />
             </div>
 
             <div className="form-group">
@@ -339,7 +337,7 @@ const SponsorsTab = ({ user }) => {
                   onChange={handleSponsorImageUpload}
                   disabled={isUploading}
                 />
-                {isUploading && <span className="upload-status">Uploading...</span>}
+                {isUploading && <span className="upload-status">Uploading…</span>}
               </div>
               <div className="input-divider">or</div>
               <input
@@ -351,8 +349,8 @@ const SponsorsTab = ({ user }) => {
                 required
               />
               {sponsorFormData.logo && (
-                <div className="image-preview achievement" style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', padding: '10px' }}>
-                  <img src={sponsorFormData.logo} alt="Preview" style={{ objectFit: 'contain' }} />
+                <div className="image-preview achievement contain">
+                  <img src={sponsorFormData.logo} alt="Preview" />
                 </div>
               )}
             </div>
@@ -392,7 +390,7 @@ const SponsorsTab = ({ user }) => {
                 <div className="card-info">
                   <h3>{item.name} <span className={`status-badge ${item.isActive ? 'active' : 'inactive'}`}>{item.isActive ? 'Active' : 'Inactive'}</span></h3>
                   <span className="order-badge">Order: {item.order}</span>
-                  <p className="card-desc"><a href={item.website} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>{item.website}</a></p>
+                  <p className="card-desc"><a href={item.website} target="_blank" rel="noopener noreferrer" className="link-inherit">{item.website}</a></p>
                 </div>
                 <div className="card-actions">
                   <button onClick={() => handleSponsorEdit(item)} className="admin-btn edit small">Edit</button>
@@ -404,7 +402,7 @@ const SponsorsTab = ({ user }) => {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 
