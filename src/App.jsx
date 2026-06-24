@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -17,6 +17,20 @@ import MobileOverlay from './components/MobileOverlay';
 function AppContent() {
   const location = useLocation();
   const isInteractiveAchievementsPage = location.pathname === '/interactive-achievements';
+
+  // Record a page view on every route change. Fire-and-forget: failures never
+  // affect the page. The admin dashboard is excluded so staff visits aren't
+  // counted as traffic. The backend resolves the real IP + geolocation.
+  useEffect(() => {
+    if (location.pathname.startsWith('/admin')) return;
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    fetch(`${apiUrl}/api/track`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: location.pathname }),
+      keepalive: true,
+    }).catch(() => {});
+  }, [location.pathname]);
 
   return (
     <>

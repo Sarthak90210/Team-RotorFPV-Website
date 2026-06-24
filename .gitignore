@@ -13,6 +13,9 @@ dist-ssr
 *.local
 .env
 .env.*
+# Keep the example templates tracked (they contain no real secrets)
+!.env.example
+!server/.env.example
 
 # Editor directories and files
 .vscode/*

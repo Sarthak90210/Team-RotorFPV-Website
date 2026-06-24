@@ -773,3 +773,200 @@
   opacity: 0.6;
 }
 
+/* ----- Traffic / Analytics ----- */
+/* Span the full width of the two-column admin grid. */
+.traffic-tab {
+  grid-column: 1 / -1;
+}
+
+.traffic-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.traffic-header h2 {
+  margin: 0;
+}
+
+/* Summary stat cards */
+.traffic-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 720px) {
+  .traffic-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.traffic-stat-card {
+  background: rgba(10, 25, 47, 0.5);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.traffic-stat-value {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.traffic-stat-label {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.traffic-stat-label em {
+  font-style: normal;
+  opacity: 0.7;
+}
+
+/* Two-column layout: countries + recent visits */
+.traffic-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 28px;
+  margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+  .traffic-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.traffic-subhead {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+/* Country bars */
+.country-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.country-row {
+  display: grid;
+  grid-template-columns: 24px minmax(70px, 1fr) 2fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.country-flag {
+  font-size: 1.1rem;
+}
+
+.country-name {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.country-bar-track {
+  background: rgba(10, 25, 47, 0.7);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.country-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-blue, #38bdf8), var(--accent));
+  border-radius: 999px;
+  min-width: 4px;
+  transition: width 0.4s ease;
+}
+
+.country-count {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: right;
+  min-width: 32px;
+}
+
+/* Recent visits table */
+.visits-table-wrap {
+  max-height: 62vh;
+  overflow: auto;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+}
+
+.visits-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.visits-table th,
+.visits-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--glass-border);
+  white-space: nowrap;
+}
+
+.visits-table th {
+  position: sticky;
+  top: 0;
+  background: rgba(10, 25, 47, 0.95);
+  backdrop-filter: blur(8px);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  z-index: 1;
+}
+
+.visits-table tr:last-child td {
+  border-bottom: none;
+}
+
+.visits-table tbody tr:hover {
+  background: rgba(100, 255, 218, 0.04);
+}
+
+.visit-flag {
+  margin-right: 6px;
+}
+
+.visit-ip {
+  font-family: 'Courier New', monospace;
+  color: var(--text-secondary);
+}
+
+.visit-path {
+  color: var(--accent);
+}
+
+.visits-table-wrap::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.visits-table-wrap::-webkit-scrollbar-thumb {
+  background: rgba(100, 255, 218, 0.25);
+  border-radius: 4px;
+}
+
