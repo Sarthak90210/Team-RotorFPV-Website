@@ -10,7 +10,7 @@ const allLinks = [
   { name: 'Drones', path: '/drones' },
   { name: 'Achievements', path: '/achievements' },
   { name: 'Board', path: '/board' },
-  { name: 'Contact Us', path: '/contact' },
+  { name: 'Events', path: '/events' },
 ];
 
 const leftLinks = allLinks.slice(0, 3);

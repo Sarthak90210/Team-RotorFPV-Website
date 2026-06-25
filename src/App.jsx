@@ -4,7 +4,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
 import Achievements from './pages/Achievements';
-import Contact from './pages/Contact';
+import Events from './pages/Events';
 import Admin from './pages/Admin';
 import Gallery from './pages/Gallery';
 import Board from './pages/Board';
@@ -54,7 +54,7 @@ function AppContent() {
           <Route path="/interactive-achievements" element={<Achievements />} />
           <Route path="/board" element={<Board />} />
           <Route path="/sponsor-us" element={<SponsorUs />} />
-          <Route path="/contact" element={<Contact />} />
+          <Route path="/events" element={<Events />} />
           <Route path="/admin" element={<Admin />} />
         </Routes>
       </main>

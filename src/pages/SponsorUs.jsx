@@ -79,6 +79,14 @@ const SponsorUs = () => {
     return url;
   };
 
+  // The contact form now lives on the home page; go there and scroll to it.
+  const goToContact = () => {
+    navigate('/');
+    setTimeout(() => {
+      document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+    }, 350);
+  };
+
   const helpOptions = [
     {
       title: "Technical Collaboration",
@@ -126,7 +134,7 @@ const SponsorUs = () => {
                 >
                   Download Brochure
                 </a>
-                <button onClick={() => navigate('/contact')} className="contact-btn">
+                <button onClick={goToContact} className="contact-btn">
                   Contact Us
                 </button>
               </div>

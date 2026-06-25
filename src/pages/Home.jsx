@@ -1,124 +1,29 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { doc, onSnapshot, collection, query, orderBy } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import VariableProximity from '../components/VariableProximity';
 import ShinyText from '../components/ShinyText';
-import GlassSurface from '../components/GlassSurface';
-import PixelCard from '../components/PixelCard';
 import './Home.css';
 
 const DEFAULT_ABOUT =
   "Team Rotor FPV is VIT's premier first-person-view drone racing and engineering team. We design, build, and fly high-performance racing drones from the ground up — pushing the limits of aerodynamics, electronics, and control systems. United by a passion for flight, we compete at national and international stages while fostering hands-on technical education for the next generation of engineers.";
 
-const EventCard = ({ event, onClick }) => (
-  <button type="button" className="event-card-button" onClick={onClick} aria-label={`Explore ${event.name}`}>
-    <GlassSurface
-      className="event-card-glass"
-      width="100%"
-      height="340px"
-      borderRadius={15}
-      brightness={40}
-      opacity={0.8}
-      blur={10}
-      backgroundOpacity={0.1}
-      useFallback={true}
-    >
-      <PixelCard variant="blue" className="event-card-inner">
-        <div className="event-image-wrap">
-          <img src={event.image} alt={event.name} className="event-image" loading="lazy" />
-          <div className="event-name-overlay">{event.name}</div>
-        </div>
-        <div className="event-info">
-          <h4 className="event-name">{event.name}</h4>
-          {event.description && <p className="event-desc">{event.description}</p>}
-        </div>
-      </PixelCard>
-    </GlassSurface>
-  </button>
-);
-
-const EventModal = ({ event, onClose }) => {
-  const [index, setIndex] = useState(0);
-
-  // Build the picture set: cover first, then any gallery images (de-duplicated).
-  const images = [...new Set([event.image, ...(event.galleryImages || [])].filter(Boolean))];
-  const longDesc = event.longDescription?.trim() ? event.longDescription : (event.description || '');
-
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose();
-      else if (e.key === 'ArrowRight') setIndex((i) => (i + 1) % images.length);
-      else if (e.key === 'ArrowLeft') setIndex((i) => (i - 1 + images.length) % images.length);
-    };
-    document.addEventListener('keydown', onKey);
-    // Lock background scroll while the modal is open.
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [images.length, onClose]);
-
-  const go = (dir) => setIndex((i) => (i + dir + images.length) % images.length);
-
-  return (
-    <div className="event-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={event.name}>
-      <div className="event-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="event-modal-close" onClick={onClose} aria-label="Close">×</button>
-
-        <div className="event-modal-gallery">
-          {/* Render every image stacked so they're all loaded up-front — switching
-              is then instant (just a crossfade) instead of fetching on each click. */}
-          {images.map((src, i) => (
-            <img
-              key={src}
-              src={src}
-              alt={`${event.name} ${i + 1}`}
-              className={`event-modal-image ${i === index ? 'active' : ''}`}
-            />
-          ))}
-          {images.length > 1 && (
-            <>
-              <button className="gallery-nav prev" onClick={() => go(-1)} aria-label="Previous image">‹</button>
-              <button className="gallery-nav next" onClick={() => go(1)} aria-label="Next image">›</button>
-              <div className="gallery-dots">
-                {images.map((_, i) => (
-                  <button
-                    key={i}
-                    className={`gallery-dot ${i === index ? 'active' : ''}`}
-                    onClick={() => setIndex(i)}
-                    aria-label={`Go to image ${i + 1}`}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="event-modal-body">
-          <span className={`event-status-badge ${event.status === 'past' ? 'past' : 'upcoming'}`}>
-            {event.status === 'past' ? 'Past Event' : 'Upcoming Event'}
-          </span>
-          <h3 className="event-modal-title">{event.name}</h3>
-          {longDesc
-            .split('\n')
-            .filter((line) => line.trim() !== '')
-            .map((line, i) => (
-              <p key={i} className="event-modal-desc">{line}</p>
-            ))}
-        </div>
-      </div>
-    </div>
-  );
+const EMPTY_CONTACT_FORM = {
+  queryType: '',
+  name: '',
+  organization: '',
+  phone: '',
+  email: '',
+  message: '',
+  honeypot: ''
 };
 
 const Home = () => {
   const containerRef = useRef(null);
   const [videoSrc, setVideoSrc] = useState("/TRFPV_Assets/Teamvideo.mp4");
   const [aboutText, setAboutText] = useState(DEFAULT_ABOUT);
-  const [events, setEvents] = useState([]);
-  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [formData, setFormData] = useState(EMPTY_CONTACT_FORM);
+  const [status, setStatus] = useState({ loading: false, success: false, error: '' });
 
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'settings', 'home'), (docSnap) => {
@@ -134,33 +39,17 @@ const Home = () => {
       console.error("Error fetching home settings:", error);
     });
 
-    const qEvents = query(collection(db, 'events'), orderBy('order', 'asc'));
-    const unsubEvents = onSnapshot(qEvents, (snapshot) => {
-      const all = snapshot.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(ev => ev.isActive !== false);
-      setEvents(all);
-    }, (error) => {
-      console.error("Error fetching events:", error);
-    });
-
-    return () => {
-      unsubscribe();
-      unsubEvents();
-    };
+    return () => unsubscribe();
   }, []);
 
-  // Samsung-style scroll effect: the hero video shrinks (and rounds) as the
-  // user scrolls into the page, and grows back when scrolling up. We drive it
-  // with a 0→1 progress var so the actual animation lives in CSS.
+  // The hero quote fades out as the user scrolls into the page. We drive it with
+  // a 0→1 progress var so the actual animation lives in CSS.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    // Writing only a CSS custom property (no layout read) is cheap enough to do
-    // directly on each scroll event without rAF throttling.
     const update = () => {
-      const distance = window.innerHeight * 0.6; // fully shrunk after ~60vh
+      const distance = window.innerHeight * 0.6; // fully faded after ~60vh
       const progress = Math.min(1, Math.max(0, window.scrollY / distance));
       el.style.setProperty('--hero-scroll', progress.toString());
     };
@@ -170,8 +59,37 @@ const Home = () => {
     return () => window.removeEventListener('scroll', update);
   }, []);
 
-  const upcomingEvents = events.filter(ev => (ev.status || 'upcoming') === 'upcoming');
-  const pastEvents = events.filter(ev => ev.status === 'past');
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setStatus({ loading: true, success: false, error: '' });
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${apiUrl}/api/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setStatus({ loading: false, success: true, error: '' });
+        setFormData(EMPTY_CONTACT_FORM);
+        setTimeout(() => setStatus(prev => ({ ...prev, success: false })), 5000);
+      } else {
+        setStatus({ loading: false, success: false, error: data.error || 'Failed to send message.' });
+      }
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      setStatus({ loading: false, success: false, error: 'Network error. Please try again later.' });
+    }
+  };
 
   return (
     <>
@@ -213,41 +131,92 @@ const Home = () => {
         </div>
       </section>
 
-      {events.length > 0 && (
-        <section id="events" className="events-section">
-          <div className="events-content">
-            <h2 className="events-title">
-              <ShinyText text="Events" speed={3} />
-            </h2>
+      <section id="contact" className="home-contact-section">
+        <div className="contact-page-wrapper">
+          {/* Left Side */}
+          <div className="contact-left">
+            <div className="contact-left-content">
+              <span className="subtitle-small">GET IN TOUCH</span>
+              <h2 className="contact-heading">
+                Connect <br />
+                <span className="italic-text">with us.</span>
+              </h2>
+              <p className="contact-description">
+                Want to join, sponsor us, or send a meme?<br />
+                Write to us.
+              </p>
 
-            {upcomingEvents.length > 0 && (
-              <div className="events-group">
-                <h3 className="events-subheading">Upcoming Events</h3>
-                <div className="events-grid">
-                  {upcomingEvents.map((ev) => (
-                    <EventCard key={ev.id} event={ev} onClick={() => setSelectedEvent(ev)} />
-                  ))}
-                </div>
-              </div>
-            )}
+              <hr className="contact-divider" />
 
-            {pastEvents.length > 0 && (
-              <div className="events-group">
-                <h3 className="events-subheading">Past Events</h3>
-                <div className="events-grid">
-                  {pastEvents.map((ev) => (
-                    <EventCard key={ev.id} event={ev} onClick={() => setSelectedEvent(ev)} />
-                  ))}
-                </div>
+              <div className="contact-info-row">
+                <span className="info-label">EMAIL</span>
+                <a href="mailto:teamrotorfpv@vit.ac.in" className="info-value">
+                  teamrotorfpv@vit.ac.in
+                </a>
               </div>
-            )}
+            </div>
           </div>
-        </section>
-      )}
 
-      {selectedEvent && (
-        <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
-      )}
+          {/* Right Side */}
+          <div className="contact-right">
+            <div className="contact-right-content glass-form-card">
+              <form className="contact-form" onSubmit={handleSubmit}>
+
+                {/* Honeypot field - hidden from users but bots will fill it */}
+                <div style={{ display: 'none' }}>
+                  <label>Leave this field blank</label>
+                  <input type="text" name="honeypot" value={formData.honeypot} onChange={handleChange} tabIndex="-1" autoComplete="off" />
+                </div>
+
+                <div className="form-group">
+                  <label>Query Type <span className="required">*</span></label>
+                  <select name="queryType" value={formData.queryType} onChange={handleChange} required>
+                    <option value="" disabled>Select a query type</option>
+                    <option value="General Query">General Query</option>
+                    <option value="Partnership">Partnership</option>
+                    <option value="Feedback">Feedback</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Name <span className="required">*</span></label>
+                  <input type="text" name="name" value={formData.name} onChange={handleChange} placeholder="Your Name" required />
+                </div>
+
+                {formData.queryType === 'Partnership' && (
+                  <div className="form-group">
+                    <label>Organization Name</label>
+                    <input type="text" name="organization" value={formData.organization} onChange={handleChange} placeholder="Your Organization" />
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label>Phone</label>
+                  <input type="text" name="phone" value={formData.phone} onChange={handleChange} placeholder="Your Phone Number" />
+                </div>
+
+                <div className="form-group">
+                  <label>Email <span className="required">*</span></label>
+                  <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Your Email" required />
+                </div>
+
+                <div className="form-group">
+                  <label>Additional Details <span className="required">*</span></label>
+                  <textarea name="message" value={formData.message} onChange={handleChange} placeholder="Enter details here..." rows="4" required maxLength="2000"></textarea>
+                </div>
+
+                {status.error && <div className="form-error-message" style={{ color: '#ff4d4d', marginBottom: '1rem', fontSize: '0.9rem' }}>{status.error}</div>}
+                {status.success && <div className="form-success-message" style={{ color: '#4caf50', marginBottom: '1rem', fontSize: '0.9rem' }}>Message sent successfully! We'll get back to you soon.</div>}
+
+                <button type="submit" className="submit-btn" disabled={status.loading}>
+                  {status.loading ? 'Sending...' : 'Submit'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
     </>
   );
 };

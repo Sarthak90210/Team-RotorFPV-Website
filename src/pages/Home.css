@@ -10,7 +10,7 @@
 }
 
 /* The video is a fixed, stationary full-screen backdrop. It never moves or
-   shrinks — the page content (About, Events) scrolls up and glides over it. */
+   shrinks — the page content (About, Contact) scrolls up and glides over it. */
 .video-background {
   position: fixed;
   top: 0;
@@ -41,7 +41,7 @@
   text-align: center;
   padding: 0 2rem;
   margin-bottom: 12vh; /* Push up slightly from the very bottom edge */
-  /* Fade the quote out as the video shrinks on scroll (matches the hero motion). */
+  /* Fade the quote out as the user scrolls down. */
   opacity: calc(1 - var(--hero-scroll, 0) * 1.4);
   will-change: opacity;
 }
@@ -115,368 +115,211 @@
   margin-bottom: 0;
 }
 
-/* Events section — transparent so the fixed video stays visible behind it. */
-.events-section {
+/* ── Contact section (lives on the home page, over the fixed video) ── */
+.home-contact-section {
   position: relative;
   z-index: 1;
   width: 100%;
-  background: transparent;
   padding: 40px 2rem 120px;
   display: flex;
   justify-content: center;
 }
 
-.events-content {
-  max-width: 1500px;
-  width: 100%;
-}
-
-/* Heading styled to match the Board page .year-title (left-aligned) */
-.events-title {
-  font-size: 2.5rem;
-  margin-bottom: 50px;
-  color: #fff;
-  text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 10px;
-  text-decoration-color: rgba(255, 255, 255, 0.3);
-  text-decoration-thickness: 1px;
-}
-
-.events-group {
-  margin-bottom: 60px;
-}
-
-.events-group:last-child {
-  margin-bottom: 0;
-}
-
-.events-subheading {
-  font-size: 1.6rem;
-  color: #fff;
-  margin-bottom: 28px;
-  padding-bottom: 10px;
-  position: relative;
-  display: inline-block;
-}
-
-.events-subheading::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 50px;
-  height: 3px;
-  background-color: var(--accent-blue);
-  border-radius: 2px;
-}
-
-/* Six cards per row, centered — incomplete rows stay centered (a grid would
-   left-align them). Card width is one sixth of the row minus the gaps. */
-.events-grid {
+.contact-page-wrapper {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 22px;
-}
-
-/* Event cards mirror the Board member card (GlassSurface + image). */
-.event-card-button {
-  width: calc((100% - 5 * 22px) / 6);
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-}
-
-/* The card inner is a PixelCard; strip its default sizing/border/background so
-   the card looks identical, and let it just provide the pixel shimmer canvas. */
-.event-card-inner.pixel-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  place-items: initial;
-  padding: 14px 12px 18px 12px;
   width: 100%;
-  height: 100%;
-  aspect-ratio: auto;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-}
-
-.event-card-inner.pixel-card::before {
-  display: none; /* remove the radial dark hover glow */
-}
-
-/* Pixel shimmer sits above the image but below the text. */
-.event-card-inner .pixel-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.event-image-wrap {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.event-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-}
-
-.event-name-overlay {
-  position: absolute;
-  top: 15px;
-  left: 15px;
-  color: white;
-  font-weight: 700;
-  font-size: 1.1rem;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  max-width: 1200px;
+  margin: 0 auto;
   font-family: 'Inter', sans-serif;
+  gap: 40px;
 }
 
-.event-info {
-  position: relative;
-  z-index: 3;
+.contact-left {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  margin-top: 18px;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-primary);
+}
+
+.contact-left-content {
+  max-width: 500px;
   width: 100%;
-  flex-grow: 1;
 }
 
-.event-name {
-  font-family: 'Outfit', sans-serif;
-  font-size: 1.2rem;
+.subtitle-small {
+  font-size: 0.9rem;
   font-weight: 600;
-  color: #fff;
-  margin-bottom: 8px;
-  text-align: center;
+  letter-spacing: 2px;
+  color: var(--accent-blue);
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  display: block;
+  font-family: 'Outfit', sans-serif;
 }
 
-.event-desc {
-  font-size: 0.92rem;
+.contact-heading {
+  font-size: 5rem;
+  line-height: 1.1;
+  margin-bottom: 30px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -1px;
+}
+
+.italic-text {
+  font-style: italic;
+  font-weight: 500;
+  color: var(--accent-blue);
+  font-family: 'Outfit', sans-serif;
+  font-size: 4.5rem;
+}
+
+.contact-description {
+  font-size: 1.1rem;
   line-height: 1.6;
   color: var(--text-secondary);
-  text-align: center;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  margin-bottom: 40px;
+  font-weight: 400;
 }
 
-/* ── Event detail modal ── */
-.event-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
+.contact-divider {
+  border: none;
+  border-top: 1px solid var(--glass-border);
+  margin: 20px 0;
+}
+
+.contact-info-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(5, 12, 24, 0.8);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  animation: modalFade 0.25s ease;
+  padding: 10px 0;
 }
 
-@keyframes modalFade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.info-label {
+  width: 120px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
 }
 
-.event-modal {
-  position: relative;
-  width: min(900px, 100%);
-  max-height: 88vh;
-  overflow-y: auto;
-  background: var(--bg-secondary);
-  border: 1px solid var(--glass-border);
-  border-radius: 18px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
-  animation: modalPop 0.25s ease;
-  /* Hide the scrollbar entirely while keeping the content scrollable. */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* old Edge/IE */
+.info-value {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: color 0.3s ease;
 }
 
-.event-modal::-webkit-scrollbar {
-  display: none; /* Chrome / Safari */
+.info-value:hover {
+  color: var(--accent-blue);
 }
 
-@keyframes modalPop {
-  from { transform: translateY(20px) scale(0.98); opacity: 0; }
-  to { transform: translateY(0) scale(1); opacity: 1; }
-}
-
-.event-modal-close {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  z-index: 2;
-  width: 38px;
-  height: 38px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(10, 25, 47, 0.6);
-  color: #fff;
-  font-size: 1.6rem;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.event-modal-close:hover {
-  background: var(--accent-blue);
-}
-
-.event-modal-gallery {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #000;
-  border-radius: 18px 18px 0 0;
-  overflow: hidden;
-}
-
-.event-modal-image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.event-modal-image.active {
-  opacity: 1;
-}
-
-.gallery-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(10, 25, 47, 0.55);
-  color: #fff;
-  font-size: 1.8rem;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.gallery-nav:hover {
-  background: var(--accent-blue);
-}
-
-.gallery-nav.prev { left: 14px; }
-.gallery-nav.next { right: 14px; }
-
-.gallery-dots {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
+.contact-right {
+  flex: 1;
   display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 20px;
+}
+
+.glass-form-card {
+  width: 100%;
+  max-width: 500px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  padding: 40px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.contact-form .form-group {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
-.gallery-dot {
-  width: 9px;
-  height: 9px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  transition: background 0.2s, transform 0.2s;
-}
-
-.gallery-dot.active {
-  background: var(--accent-blue);
-  transform: scale(1.2);
-}
-
-.event-modal-body {
-  padding: 28px 32px 36px;
-}
-
-.event-status-badge {
-  display: inline-block;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  padding: 5px 12px;
-  border-radius: 20px;
-  margin-bottom: 16px;
-}
-
-.event-status-badge.upcoming {
-  background: rgba(56, 189, 248, 0.15);
-  color: var(--accent-blue);
-  border: 1px solid rgba(56, 189, 248, 0.4);
-}
-
-.event-status-badge.past {
-  background: rgba(136, 146, 176, 0.15);
-  color: var(--text-secondary);
-  border: 1px solid rgba(136, 146, 176, 0.35);
-}
-
-.event-modal-title {
-  font-family: 'Outfit', sans-serif;
-  font-size: 2rem;
-  color: #fff;
-  margin-bottom: 18px;
-}
-
-.event-modal-desc {
-  font-size: 1.05rem;
-  line-height: 1.85;
+.contact-form .form-group label {
+  font-size: 0.95rem;
+  font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 1rem;
+  font-family: 'Outfit', sans-serif;
 }
 
-.event-modal-desc:last-child {
-  margin-bottom: 0;
+.required {
+  color: var(--accent-blue);
 }
 
-/* Scale the 6-per-row event cards down as the viewport narrows. */
-@media (max-width: 1400px) {
-  .event-card-button { width: calc((100% - 3 * 22px) / 4); }
+.contact-form .form-group input,
+.contact-form .form-group select,
+.contact-form .form-group textarea {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background-color: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.3s ease;
+  outline: none;
 }
 
-@media (max-width: 1000px) {
-  .event-card-button { width: calc((100% - 2 * 22px) / 3); }
+.contact-form .form-group input::placeholder,
+.contact-form .form-group textarea::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
 }
 
-@media (max-width: 680px) {
-  .event-card-button { width: calc((100% - 16px) / 2); }
+.contact-form .form-group input:focus,
+.contact-form .form-group select:focus,
+.contact-form .form-group textarea:focus {
+  border-color: var(--accent-blue);
+  background-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.1);
 }
 
-@media (max-width: 440px) {
-  .event-card-button { width: 100%; }
+.contact-form .form-group select option {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.contact-form .form-group textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.submit-btn {
+  margin-top: 15px;
+  padding: 14px;
+  background-color: var(--accent-blue);
+  color: #0a192f;
+  border: none;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  font-family: 'Outfit', sans-serif;
+}
+
+.submit-btn:hover {
+  opacity: 0.9;
+}
+
+.submit-btn:active {
+  opacity: 0.8;
 }
 
 @media screen and (max-width: 768px) {
@@ -489,8 +332,7 @@
     padding: 70px 1.5rem 60px;
   }
 
-  .about-title,
-  .events-title {
+  .about-title {
     font-size: 2rem;
   }
 
@@ -498,20 +340,27 @@
     font-size: 1rem;
     line-height: 1.8;
   }
+}
 
-  .events-section {
-    padding: 20px 1.5rem 90px;
+@media (max-width: 900px) {
+  .contact-page-wrapper {
+    flex-direction: column;
+    padding: 0;
   }
 
-  .events-grid {
-    gap: 16px;
+  .contact-left, .contact-right {
+    padding: 20px 0;
   }
 
-  .event-modal-body {
-    padding: 22px 20px 28px;
+  .contact-heading {
+    font-size: 3.5rem;
   }
 
-  .event-modal-title {
-    font-size: 1.5rem;
+  .italic-text {
+    font-size: 3.2rem;
+  }
+
+  .glass-form-card {
+    padding: 30px 20px;
   }
 }
