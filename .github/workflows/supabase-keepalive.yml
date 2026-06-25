@@ -1,5 +1,4 @@
 name: Supabase Keep-Alive
-
 # Supabase pauses free projects after ~7 days of inactivity — which would take
 # the drone 3D models offline. This job pings the database once a day so the
 # project (and its model storage) never sleeps.
@@ -11,37 +10,33 @@ name: Supabase Keep-Alive
 #        alter table keepalive enable row level security;
 #        create policy "anon read keepalive" on keepalive
 #          for select to anon using (true);
-#   2. In GitHub → repo Settings → Secrets and variables → Actions, add:
+#   2. In GitHub → repo Settings → Secrets and variables → Actions → Secrets tab,
+#      add these as Repository secrets:
 #        SUPABASE_URL       = https://<project-ref>.supabase.co
 #        SUPABASE_ANON_KEY  = <the anon/public key>
-
 on:
   schedule:
     - cron: '17 6 * * *'   # daily at 06:17 UTC (odd minute dodges cron congestion)
   workflow_dispatch: {}      # allow manual runs from the Actions tab
-
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
+      - name: Check secrets are present
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          [ -z "${SUPABASE_URL}" ] && echo "SUPABASE_URL is EMPTY" || echo "SUPABASE_URL set (len ${#SUPABASE_URL})"
+          [ -z "${SUPABASE_ANON_KEY}" ] && echo "ANON_KEY is EMPTY" || echo "ANON_KEY set (len ${#SUPABASE_ANON_KEY})"
+
       - name: Ping Supabase REST to keep the project active
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::error::SUPABASE_URL or SUPABASE_ANON_KEY repo secret is not set."
-            exit 1
-          fi
-          base="${SUPABASE_URL%/}"   # tolerate a trailing slash
-          code=$(curl --silent --show-error --write-out "%{http_code}" --output response.txt \
-            "${base}/rest/v1/keepalive?select=id&limit=1" \
+          curl --fail --silent --show-error \
+            "${SUPABASE_URL}/rest/v1/keepalive?select=id&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
-          echo "HTTP $code"
-          echo "Response: $(cat response.txt)"
-          if [ "$code" != "200" ]; then
-            echo "::error::Keep-alive ping failed (HTTP $code). Check the URL, anon key, and that the keepalive table exists."
-            exit 1
-          fi
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}"
           echo "Keep-alive ping OK"
