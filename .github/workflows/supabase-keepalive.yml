@@ -29,8 +29,19 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          curl --fail --silent --show-error \
-            "${SUPABASE_URL}/rest/v1/keepalive?select=id&limit=1" \
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::SUPABASE_URL or SUPABASE_ANON_KEY repo secret is not set."
+            exit 1
+          fi
+          base="${SUPABASE_URL%/}"   # tolerate a trailing slash
+          code=$(curl --silent --show-error --write-out "%{http_code}" --output response.txt \
+            "${base}/rest/v1/keepalive?select=id&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}"
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          echo "HTTP $code"
+          echo "Response: $(cat response.txt)"
+          if [ "$code" != "200" ]; then
+            echo "::error::Keep-alive ping failed (HTTP $code). Check the URL, anon key, and that the keepalive table exists."
+            exit 1
+          fi
           echo "Keep-alive ping OK"
