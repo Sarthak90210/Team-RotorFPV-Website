@@ -27,6 +27,7 @@ const DronesTab = ({ user }) => {
   const [formData, setFormData] = useState(EMPTY_DRONE_FORM);
   const [nodeNames, setNodeNames] = useState([]); // part names read from the model
   const [loadingNodes, setLoadingNodes] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const imageInputRef = useRef(null);
   const modelInputRef = useRef(null);
 
@@ -240,6 +241,56 @@ const DronesTab = ({ user }) => {
       <div className="admin-left-column">
         <div className="admin-glass-panel form-panel">
           <h2>{editingId ? 'Edit Drone' : 'Add New Drone'}</h2>
+
+          <button
+            type="button"
+            className="admin-btn secondary small"
+            onClick={() => setShowHelp((s) => !s)}
+            style={{ marginBottom: 14 }}
+          >
+            {showHelp ? 'Hide guide' : 'ℹ How to prepare & upload a model'}
+          </button>
+
+          {showHelp && (
+            <div
+              style={{
+                marginBottom: 18,
+                padding: '14px 16px',
+                borderRadius: 10,
+                border: '1px solid rgba(120,180,255,0.25)',
+                background: 'rgba(10,20,40,0.5)',
+                fontSize: '0.86rem',
+                lineHeight: 1.5,
+                color: 'rgba(230,238,250,0.85)',
+              }}
+            >
+              <strong style={{ color: '#9ec5ff' }}>1. Export from FreeCAD</strong>
+              <ul style={{ margin: '6px 0 12px', paddingLeft: 18 }}>
+                <li>Name each part in the model tree (e.g. “Front Left Motor”, “PIXHAWK 5X-6X”) — these names become the clickable components.</li>
+                <li>Select all parts → <strong>File → Export</strong> → choose <strong>glTF Binary (.glb)</strong>.</li>
+                <li><strong>Upload a single .glb</strong> (self-contained). A plain <code>.gltf</code> makes a separate <code>.bin</code> file that can’t be auto-optimized from one upload.</li>
+              </ul>
+
+              <strong style={{ color: '#9ec5ff' }}>2. Upload it below</strong>
+              <p style={{ margin: '6px 0 12px' }}>
+                The site automatically cleans, simplifies and compresses the model
+                (keeping every part separate) before storing — you don’t need to
+                optimize it yourself.
+              </p>
+
+              <strong style={{ color: '#9ec5ff' }}>3. If the automatic optimization fails</strong>
+              <p style={{ margin: '6px 0 6px' }}>
+                (e.g. a very large file) optimize it offline, then upload the result:
+              </p>
+              <ol style={{ margin: '0 0 4px', paddingLeft: 18 }}>
+                <li><a href="/glb-optimizer.zip" download style={{ color: '#9ec5ff', textDecoration: 'underline' }}>Download the optimizer tool</a>.</li>
+                <li>Unzip it, install <a href="https://nodejs.org" target="_blank" rel="noreferrer" style={{ color: '#9ec5ff', textDecoration: 'underline' }}>Node.js</a>, open a terminal in the folder and run <code>npm install</code>.</li>
+                <li>Put your <code>.glb</code> in <code>input/</code>, run <code>npm run optimize</code>.</li>
+                <li>Upload the file from <code>output/</code> here.</li>
+              </ol>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="admin-form">
             <div className="form-group">
               <label>Name</label>
@@ -314,7 +365,11 @@ const DronesTab = ({ user }) => {
             </div>
 
             <div className="form-group">
-              <label>3D Model (.glb / .gltf — up to 50 MB)</label>
+              <label>3D Model — upload a self-contained <strong>.glb</strong> (recommended, up to 50 MB)</label>
+              <p className="card-desc" style={{ margin: '0 0 8px' }}>
+                Optimized automatically on upload. A plain <code>.gltf</code> with an
+                external <code>.bin</code> will be stored without optimization — use a .glb.
+              </p>
               <div className="file-upload">
                 <input
                   type="file"
@@ -323,7 +378,7 @@ const DronesTab = ({ user }) => {
                   onChange={handleModelUpload}
                   disabled={busy}
                 />
-                {isUploadingModel && <span className="upload-status">Uploading model…</span>}
+                {isUploadingModel && <span className="upload-status">Optimizing & uploading… (may take a while)</span>}
               </div>
               {formData.modelUrl && (
                 <p className="card-desc" style={{ marginTop: 8 }}>

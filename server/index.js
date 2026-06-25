@@ -3,6 +3,11 @@ import cors from 'cors';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { createClient } from '@supabase/supabase-js';
+import { NodeIO } from '@gltf-transform/core';
+import { ALL_EXTENSIONS, KHRDracoMeshCompression } from '@gltf-transform/extensions';
+import { dedup, weld, simplify, prune } from '@gltf-transform/functions';
+import { MeshoptSimplifier } from 'meshoptimizer';
+import draco3d from 'draco3dgltf';
 import { Resend } from 'resend';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import geoip from 'geoip-lite';
@@ -133,6 +138,47 @@ const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_
   : null;
 if (!supabase) {
   console.warn('[Supabase] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set — 3D model uploads are disabled.');
+}
+
+// ── glTF optimization (runs server-side on every model upload) ──
+// Lazily build a NodeIO with the Draco encoder/decoder wired in. Created once
+// and reused; the WASM modules take a moment to initialize.
+let _gltfIOPromise = null;
+function getGltfIO() {
+  if (!_gltfIOPromise) {
+    _gltfIOPromise = (async () => {
+      const [encoder, decoder] = await Promise.all([
+        draco3d.createEncoderModule(),
+        draco3d.createDecoderModule(),
+      ]);
+      return new NodeIO()
+        .registerExtensions(ALL_EXTENSIONS)
+        .registerDependencies({ 'draco3d.encoder': encoder, 'draco3d.decoder': decoder });
+    })();
+  }
+  return _gltfIOPromise;
+}
+
+// Optimize an uploaded model buffer: clean + simplify while KEEPING parts
+// separate (no join/flatten, so named parts stay clickable), then Draco-compress.
+// Returns an optimized GLB Buffer. Throws on unreadable input (caller falls back).
+async function optimizeModel(inputBuffer, ext) {
+  const io = await getGltfIO();
+  const doc = ext === 'gltf'
+    ? await io.readJSON({ json: JSON.parse(inputBuffer.toString('utf8')), resources: {} })
+    : await io.readBinary(new Uint8Array(inputBuffer));
+
+  await MeshoptSimplifier.ready;
+  await doc.transform(
+    dedup(),
+    weld(),
+    simplify({ simplifier: MeshoptSimplifier, error: 0.005, ratio: 0.0 }),
+    prune(),
+  );
+
+  // Presence of this extension makes writeBinary Draco-encode the geometry.
+  doc.createExtension(KHRDracoMeshCompression).setRequired(true);
+  return Buffer.from(await io.writeBinary(doc));
 }
 
 // ── Multer configuration (memory storage, media up to 20 MB) ──
@@ -556,19 +602,37 @@ app.post('/api/upload-model', verifyAdmin, uploadLimiter, upload.single('model')
       return res.status(400).json({ error: 'Only .glb or .gltf models are allowed.' });
     }
 
+    // Optimize before storing (clean + simplify, parts kept separate, then Draco).
+    // On any failure, fall back to storing the original so uploads never break.
+    let buffer = req.file.buffer;
+    let outExt = ext;
+    let optimized = false;
+    const originalBytes = req.file.buffer.length;
+    try {
+      const result = await optimizeModel(req.file.buffer, ext);
+      if (result && result.length > 0) {
+        buffer = result;
+        outExt = 'glb';
+        optimized = true;
+      }
+    } catch (optErr) {
+      console.error('[Model optimize] failed — storing original:', optErr.message || optErr);
+    }
+
     // Sanitize the folder and build a collision-proof object path.
     const folder = (req.body.folder || 'models').replace(/[^a-zA-Z0-9/_-]/g, '');
     const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const path = `${folder}/${unique}.${ext}`;
-    const contentType = ext === 'glb' ? 'model/gltf-binary' : 'model/gltf+json';
+    const path = `${folder}/${unique}.${outExt}`;
+    const contentType = outExt === 'glb' ? 'model/gltf-binary' : 'model/gltf+json';
 
     const { error: upErr } = await supabase.storage
       .from(SUPABASE_BUCKET)
-      .upload(path, req.file.buffer, { contentType, upsert: false });
+      .upload(path, buffer, { contentType, upsert: false });
     if (upErr) throw upErr;
 
+    console.log(`[Model upload] ${optimized ? 'optimized' : 'stored as-is'}: ${originalBytes} → ${buffer.length} bytes`);
     const { data } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
-    res.json({ url: data.publicUrl, path });
+    res.json({ url: data.publicUrl, path, optimized });
   } catch (error) {
     console.error('Model upload error:', error);
     res.status(500).json({ error: error.message || 'Model upload failed' });

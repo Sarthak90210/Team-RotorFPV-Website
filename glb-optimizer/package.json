@@ -1,0 +1,13 @@
+{
+  "name": "rotorfpv-glb-optimizer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone tool: optimize GLB/glTF drone models for the RotorFPV site (clean + simplify, keep parts separate, then Draco compress).",
+  "scripts": {
+    "optimize": "node optimize.mjs"
+  },
+  "dependencies": {
+    "@gltf-transform/cli": "^4.4.0"
+  }
+}
