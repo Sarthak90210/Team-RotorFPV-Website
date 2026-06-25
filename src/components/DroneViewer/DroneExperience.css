@@ -4,9 +4,51 @@
   position: fixed;
   inset: 0;
   z-index: 4000;
-  background: #000;
+  /* Pure black with a faint dot-matrix grid — minimal "terminal / hacker" feel.
+     The drone sits in its own black space, separated from the rest of the site. */
+  background-color: #000;
+  background-image: radial-gradient(rgba(120, 230, 200, 0.07) 1px, transparent 1px);
+  background-size: 26px 26px;
   overscroll-behavior: contain;
   touch-action: none;
+  font-feature-settings: 'liga' 0;
+}
+
+/* Subtle scanline + corner glow to sell the theme without overdoing it. */
+.drone-experience::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 80% at 50% 120%, rgba(120, 230, 200, 0.06), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.015) 0 1px, transparent 1px 3px);
+}
+
+/* Terminal-style HUD (decorative). */
+.drone-hud {
+  position: fixed;
+  left: 26px;
+  bottom: 24px;
+  z-index: 4001;
+  margin: 0;
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: rgba(120, 230, 200, 0.55);
+  pointer-events: none;
+  user-select: none;
+  text-shadow: 0 0 8px rgba(120, 230, 200, 0.25);
+}
+
+.drone-hud-cursor {
+  display: inline-block;
+  animation: drone-hud-blink 1s steps(2, start) infinite;
+}
+
+@keyframes drone-hud-blink {
+  to { opacity: 0; }
 }
 
 .drone-experience canvas {
@@ -54,4 +96,171 @@
   color: rgba(255, 255, 255, 0.8);
   font-size: 0.95rem;
   white-space: nowrap;
+}
+
+/* Left-side info panel, shown once the intro animation completes. */
+.drone-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 4001;
+  width: min(34vw, 420px);
+  height: 100%;
+  padding: 110px 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  background: linear-gradient(90deg, rgba(6, 12, 26, 0.72) 0%, rgba(6, 12, 26, 0.35) 70%, transparent 100%);
+  animation: drone-panel-in 0.4s ease both;
+}
+
+@keyframes drone-panel-in {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.drone-panel-name {
+  font-size: 2.1rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+.drone-panel-desc {
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.72);
+  margin: 0;
+  white-space: pre-line;
+}
+
+.drone-components {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drone-components-title {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ec5ff;
+  margin: 0 0 4px;
+}
+
+.drone-component-item {
+  text-align: left;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(120, 160, 220, 0.22);
+  background: rgba(17, 34, 64, 0.5);
+  color: #e8eefc;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+.drone-component-item:hover {
+  border-color: rgba(140, 180, 255, 0.55);
+  background: rgba(30, 56, 100, 0.6);
+  transform: translateX(3px);
+}
+
+.drone-component-item.active {
+  border-color: #9ec5ff;
+  background: rgba(56, 189, 248, 0.2);
+  color: #fff;
+}
+
+/* Leader-line callout anchored to a selected component (rendered via drei Html,
+   so its top-left sits exactly on the part's projected screen point). */
+.drone-callout-inner {
+  position: relative;
+  pointer-events: none;
+}
+
+.drone-callout-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: #f4d58a;
+  box-shadow: 0 0 14px rgba(244, 213, 138, 0.95), 0 0 4px rgba(255, 255, 255, 0.9);
+}
+
+.drone-callout-leader {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 88px;
+  height: 2px;
+  transform-origin: left center;
+  transform: rotate(-22deg);
+  background: linear-gradient(90deg, rgba(244, 213, 138, 0.95), rgba(120, 230, 200, 0.2));
+  box-shadow: 0 0 8px rgba(244, 213, 138, 0.4);
+}
+
+.drone-callout-box {
+  position: absolute;
+  left: 84px;
+  top: -68px;
+  width: 258px;
+  padding: 14px 16px;
+  border-radius: 13px;
+  /* Glassy dark panel with a golden rim, lit from the top by the neon tube. */
+  background:
+    linear-gradient(180deg, rgba(34, 38, 46, 0.96) 0%, rgba(10, 13, 20, 0.96) 100%);
+  border: 1px solid rgba(212, 175, 90, 0.6);
+  box-shadow:
+    0 -12px 30px rgba(200, 240, 255, 0.12),      /* tube glow spilling over the top */
+    0 18px 44px rgba(0, 0, 0, 0.65),             /* depth */
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),     /* lit top edge */
+    inset 0 0 24px rgba(120, 230, 200, 0.06);    /* faint neon interior */
+  backdrop-filter: blur(10px);
+  animation: drone-callout-in 0.28s ease both;
+}
+
+/* Soft golden/neon halo around the whole box so it reads as present in the dark. */
+.drone-callout-box::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 13px;
+  pointer-events: none;
+  box-shadow: 0 0 26px rgba(212, 175, 90, 0.22);
+}
+
+@keyframes drone-callout-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.drone-callout-box h4 {
+  margin: 0 0 7px;
+  font-size: 1.04rem;
+  color: #f6e6bd; /* golden title */
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 12px rgba(212, 175, 90, 0.4);
+}
+
+/* Thin golden underline under the title, like a highlight from the tube. */
+.drone-callout-box h4::after {
+  content: '';
+  display: block;
+  margin-top: 7px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(244, 213, 138, 0.8), transparent);
+}
+
+.drone-callout-box p {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: rgba(232, 240, 250, 0.82);
+  white-space: pre-line;
 }

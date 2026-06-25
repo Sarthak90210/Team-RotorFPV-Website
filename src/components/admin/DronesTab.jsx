@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { db } from '../../firebase';
 import { uploadFile, deleteCloudinaryImage, uploadModel, deleteModel } from '../../lib/adminApi';
 
 const EMPTY_DRONE_FORM = {
   name: '',
   description: '',
+  longDescription: '',
   image: '',
   modelUrl: '',
   modelPath: '',
   modelName: '',
   order: 0,
   isActive: true,
+  components: [],
 };
 
 const DronesTab = ({ user }) => {
@@ -21,6 +25,8 @@ const DronesTab = ({ user }) => {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isUploadingModel, setIsUploadingModel] = useState(false);
   const [formData, setFormData] = useState(EMPTY_DRONE_FORM);
+  const [nodeNames, setNodeNames] = useState([]); // part names read from the model
+  const [loadingNodes, setLoadingNodes] = useState(false);
   const imageInputRef = useRef(null);
   const modelInputRef = useRef(null);
 
@@ -35,6 +41,60 @@ const DronesTab = ({ user }) => {
     });
     return () => unsub();
   }, []);
+
+  // Whenever a model is present, load it in the browser and read out its
+  // top-level node names — fully automatic, no AI/manual step. These become the
+  // checklist of parts the admin can mark as interactive.
+  useEffect(() => {
+    if (!formData.modelUrl) { setNodeNames([]); return; }
+    let cancelled = false;
+    setLoadingNodes(true);
+    const loader = new GLTFLoader();
+    const draco = new DRACOLoader();
+    draco.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+    loader.setDRACOLoader(draco);
+    loader.load(
+      formData.modelUrl,
+      (gltf) => {
+        if (cancelled) return;
+        const names = gltf.scene.children.map((n) => n.name).filter(Boolean);
+        setNodeNames(names);
+        setLoadingNodes(false);
+        draco.dispose();
+      },
+      undefined,
+      (err) => {
+        if (cancelled) return;
+        console.error('Failed to read model parts:', err);
+        setNodeNames([]);
+        setLoadingNodes(false);
+        draco.dispose();
+      },
+    );
+    return () => { cancelled = true; };
+  }, [formData.modelUrl]);
+
+  // ── Interactive-component helpers ──
+  const getComponent = (nodeName) => formData.components.find((c) => c.nodeName === nodeName);
+
+  const toggleComponent = (nodeName) => {
+    setFormData((prev) => {
+      const exists = prev.components.some((c) => c.nodeName === nodeName);
+      return {
+        ...prev,
+        components: exists
+          ? prev.components.filter((c) => c.nodeName !== nodeName)
+          : [...prev.components, { nodeName, label: nodeName, description: '' }],
+      };
+    });
+  };
+
+  const updateComponent = (nodeName, field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      components: prev.components.map((c) => (c.nodeName === nodeName ? { ...c, [field]: value } : c)),
+    }));
+  };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -109,12 +169,14 @@ const DronesTab = ({ user }) => {
     setFormData({
       name: item.name || '',
       description: item.description || '',
+      longDescription: item.longDescription || '',
       image: item.image || '',
       modelUrl: item.modelUrl || '',
       modelPath: item.modelPath || '',
       modelName: item.modelName || '',
       order: item.order || 0,
       isActive: item.isActive !== false,
+      components: item.components || [],
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -140,12 +202,14 @@ const DronesTab = ({ user }) => {
     const dataToSave = {
       name: formData.name,
       description: formData.description,
+      longDescription: formData.longDescription,
       image: formData.image,
       modelUrl: formData.modelUrl,
       modelPath: formData.modelPath,
       modelName: formData.modelName,
       order: Number(formData.order),
       isActive: formData.isActive,
+      components: formData.components,
       updatedAt: serverTimestamp(),
       updatedBy: user.email,
     };
@@ -195,8 +259,19 @@ const DronesTab = ({ user }) => {
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                rows="3"
+                rows="2"
                 placeholder="A short one-or-two line summary for the card…"
+              ></textarea>
+            </div>
+
+            <div className="form-group">
+              <label>Detailed Description (shown in the 3D viewer panel)</label>
+              <textarea
+                name="longDescription"
+                value={formData.longDescription}
+                onChange={handleInputChange}
+                rows="5"
+                placeholder="The full write-up shown beside the 3D model. Use blank lines to separate paragraphs."
               ></textarea>
             </div>
 
@@ -256,6 +331,65 @@ const DronesTab = ({ user }) => {
                 </p>
               )}
             </div>
+
+            {formData.modelUrl && (
+              <div className="form-group">
+                <label>Interactive Components</label>
+                <p className="card-desc" style={{ marginTop: 0, marginBottom: 8 }}>
+                  Tick the parts visitors can click in the 3D viewer, then give each a label and description.
+                </p>
+                {loadingNodes && <span className="upload-status">Reading model parts…</span>}
+                {!loadingNodes && nodeNames.length === 0 && (
+                  <p className="card-desc">No named parts found in this model.</p>
+                )}
+                <div
+                  style={{
+                    maxHeight: 320,
+                    overflowY: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    marginTop: 6,
+                  }}
+                >
+                  {nodeNames.map((nodeName) => {
+                    const sel = getComponent(nodeName);
+                    return (
+                      <div
+                        key={nodeName}
+                        style={{
+                          border: '1px solid rgba(255,255,255,0.12)',
+                          borderRadius: 8,
+                          padding: '8px 10px',
+                          background: sel ? 'rgba(56,189,248,0.08)' : 'transparent',
+                        }}
+                      >
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={!!sel} onChange={() => toggleComponent(nodeName)} />
+                          <span style={{ fontSize: '0.9rem' }}>{nodeName}</span>
+                        </label>
+                        {sel && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                            <input
+                              type="text"
+                              value={sel.label}
+                              onChange={(e) => updateComponent(nodeName, 'label', e.target.value)}
+                              placeholder="Display label (e.g. Flight Controller)"
+                            />
+                            <textarea
+                              rows="2"
+                              value={sel.description}
+                              onChange={(e) => updateComponent(nodeName, 'description', e.target.value)}
+                              placeholder="Description shown when this part is selected"
+                            ></textarea>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="form-group checkbox-group">
               <label>

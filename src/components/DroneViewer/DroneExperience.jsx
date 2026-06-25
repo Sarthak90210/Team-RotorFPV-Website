@@ -1,7 +1,8 @@
-import React, { useRef, useEffect, useMemo, useLayoutEffect, Suspense } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useLayoutEffect, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useGLTF, Html, useProgress, Environment } from '@react-three/drei';
+import { useGLTF, Html, useProgress, Environment, OrbitControls } from '@react-three/drei';
 import './DroneExperience.css';
 
 // Fallback model if a drone record has no modelUrl (shouldn't happen in prod).
@@ -22,6 +23,20 @@ const SMOOTHING = 0.08;
 const CAM_DIST_FACTOR = 2.3; // distance from centre, in bounding-sphere radii
 const CAM_ELEV_BASE = 0.30;  // resting elevation above the horizon (radians)
 const CAM_ELEV_AMP = 0.5;    // up/down swing amplitude (radians)
+// Shift the rendered subject toward the right (fraction of width) so the
+// left side is free for the description/components panel. Negative = right.
+const CAM_VIEW_SHIFT = 0.18;
+// Scroll progress at which the intro animation is "done" and free-orbit unlocks.
+const INTERACT_THRESHOLD = 0.995;
+// How far a selected component slides out, as a fraction of the model radius.
+const EXTRACT_DIST = 0.5;
+
+// Reused scratch vector for per-frame world-position reads (avoids allocations).
+const _worldPos = new THREE.Vector3();
+
+// Neon tubelight rig that switches on once the intro completes.
+const TUBE_LIGHT_MAX = 3.6;       // directional light intensity when fully lit
+const TUBE_EMISSIVE_MAX = 4.0;    // glow of the visible tube bar when fully lit
 // CAD (FreeCAD) is Z-up; three.js is Y-up. Tilt the model -90° about X so its
 // rotor plane lies flat → yaw about Y is then the correct horizontal spin.
 // If the drone appears upside-down, flip the sign to +Math.PI / 2.
@@ -152,6 +167,7 @@ function fitAndReplace(node, sourceScene, rotation, scaleMul) {
   holder.scale.setScalar(s / avgScale);
   holder.position.copy(node.worldToLocal(phCenter.clone()));
 
+  repl.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   node.add(holder);
 }
 
@@ -163,11 +179,18 @@ function fitAndReplace(node, sourceScene, rotation, scaleMul) {
  * So it explodes while rotating through the first half, then reassembles while
  * finishing the turn, landing back where it started, fully assembled.
  */
-function DroneModel({ progressRef, modelUrl }) {
+function DroneModel({ progressRef, modelUrl, onComplete, selected }) {
   const { scene } = useGLTF(modelUrl, true);
   const piGltf = useGLTF('/RaspberryPi5_4GB.glb');
   const pivotRef = useRef();
-  const { camera } = useThree();
+  const trackerRef = useRef(); // follows the selected part for the callout anchor
+  const lightRef = useRef();   // tubelight (directional) — animates on at completion
+  const tubeMatRef = useRef(); // emissive bar material — glows on at completion
+  const litRef = useRef(0);    // 0..1 tubelight "on" amount
+  const interactiveRef = useRef(false);
+  const selectedRef = useRef(null);
+  selectedRef.current = selected;
+  const { camera, size } = useThree();
 
   // Clone so repeated open/close doesn't accumulate transforms on the cached gltf.
   const model = useMemo(() => scene.clone(true), [scene]);
@@ -191,7 +214,13 @@ function DroneModel({ progressRef, modelUrl }) {
     };
     for (const part of model.children) {
       const mat = matFor(categorize(part.name));
-      part.traverse((o) => { if (o.isMesh) o.material = mat; });
+      part.traverse((o) => {
+        if (o.isMesh) {
+          o.material = mat;
+          o.castShadow = true;
+          o.receiveShadow = true;
+        }
+      });
     }
   }, [model]);
 
@@ -211,10 +240,15 @@ function DroneModel({ progressRef, modelUrl }) {
     const list = model.children.map((node) => {
       const b = new THREE.Box3().setFromObject(node);
       const cc = b.getCenter(new THREE.Vector3());
+      const dir = cc.clone().sub(c); // radial direction from model centre (local space)
+      // Unit direction a selected part slides along; central parts lift up (+Z local).
+      const extractDir = dir.lengthSq() > 1e-6 ? dir.clone().normalize() : new THREE.Vector3(0, 0, 1);
       return {
         node,
         base: node.position.clone(),
-        dir: cc.clone().sub(c), // radial direction from model centre (local space)
+        dir,
+        extractDir,
+        cur: 0, // animated isolate amount (0..1), mutated in useFrame
       };
     });
 
@@ -246,42 +280,142 @@ function DroneModel({ progressRef, modelUrl }) {
   }, [radius, camera]);
 
   const smoothed = useRef(0);
+  const viewShiftRef = useRef(0); // 0 = centred (during intro), 1 = shifted right
 
   useFrame(() => {
     const target = progressRef.current;
     smoothed.current += (target - smoothed.current) * SMOOTHING;
     const p = smoothed.current;
 
+    // Flip into / out of free-orbit mode as the intro animation completes.
+    const isComplete = p >= INTERACT_THRESHOLD;
+    if (isComplete !== interactiveRef.current) {
+      interactiveRef.current = isComplete;
+      onComplete?.(isComplete);
+    }
+
     const explode = Math.sin(Math.PI * THREE.MathUtils.clamp(p, 0, 1));
-    for (const { node, base, dir } of parts) {
-      node.position.copy(base).addScaledVector(dir, explode * EXPLODE_STRENGTH);
+    const selName = selectedRef.current?.nodeName;
+    for (const part of parts) {
+      // ease this part's "isolated" amount toward 1 if selected, else 0
+      const goal = selName && part.node.name === selName ? 1 : 0;
+      part.cur += (goal - part.cur) * 0.18;
+      part.node.position
+        .copy(part.base)
+        .addScaledVector(part.dir, explode * EXPLODE_STRENGTH)
+        .addScaledVector(part.extractDir, part.cur * radius * EXTRACT_DIST);
     }
     if (pivotRef.current) {
       pivotRef.current.rotation.y = MODEL_YAW_OFFSET + p * Math.PI * 2 * SPIN_DIRECTION;
     }
 
-    // Camera: orbit opposite to the drone (-SPIN_DIRECTION) + diagonal rise/dip.
-    const dist = radius * CAM_DIST_FACTOR;
-    const az = -p * Math.PI * 2 * SPIN_DIRECTION;
-    const el = CAM_ELEV_BASE + CAM_ELEV_AMP * Math.sin(Math.PI * 2 * p);
-    const cosEl = Math.cos(el);
-    camera.position.set(
-      dist * cosEl * Math.sin(az),
-      dist * Math.sin(el),
-      dist * cosEl * Math.cos(az),
-    );
-    camera.lookAt(0, 0, 0);
+    // Anchor the callout to the selected part's current world position so the
+    // leader line + box track it as the camera orbits.
+    if (trackerRef.current && selName) {
+      const part = parts.find((pt) => pt.node.name === selName);
+      if (part) {
+        part.node.updateWorldMatrix(true, false);
+        part.node.getWorldPosition(_worldPos);
+        trackerRef.current.position.copy(_worldPos);
+      }
+    }
+
+    // While the intro plays, the camera is scroll-driven (orbit opposite to the
+    // drone + diagonal rise/dip). Once complete, OrbitControls owns the camera.
+    if (!isComplete) {
+      const dist = radius * CAM_DIST_FACTOR;
+      const az = -p * Math.PI * 2 * SPIN_DIRECTION;
+      const el = CAM_ELEV_BASE + CAM_ELEV_AMP * Math.sin(Math.PI * 2 * p);
+      const cosEl = Math.cos(el);
+      camera.position.set(
+        dist * cosEl * Math.sin(az),
+        dist * Math.sin(el),
+        dist * cosEl * Math.cos(az),
+      );
+      camera.lookAt(0, 0, 0);
+    }
+
+    // Tubelight switches on as the intro completes (light + visible glow).
+    const litGoal = isComplete ? 1 : 0;
+    litRef.current += (litGoal - litRef.current) * 0.05;
+    if (lightRef.current) lightRef.current.intensity = litRef.current * TUBE_LIGHT_MAX;
+    if (tubeMatRef.current) tubeMatRef.current.emissiveIntensity = litRef.current * TUBE_EMISSIVE_MAX;
+
+    // Once complete, ease the projection so the drone slides to the right and
+    // frees the left for the panel. Centred (offset 0) during the intro.
+    const targetShift = isComplete ? 1 : 0;
+    viewShiftRef.current += (targetShift - viewShiftRef.current) * 0.08;
+    if (size.width > 0) {
+      const sx = -size.width * CAM_VIEW_SHIFT * viewShiftRef.current;
+      camera.setViewOffset(size.width, size.height, sx, 0, size.width, size.height);
+      camera.updateProjectionMatrix();
+    }
   });
 
   // pivot (animated yaw) → tilt (Z-up fix) → centre → model.
   return (
-    <group ref={pivotRef}>
-      <group rotation={[MODEL_TILT_X, 0, 0]}>
-        <group position={[-center.x, -center.y, -center.z]}>
-          <primitive object={model} />
+    <>
+      <group ref={pivotRef}>
+        <group rotation={[MODEL_TILT_X, 0, 0]}>
+          <group position={[-center.x, -center.y, -center.z]}>
+            <primitive object={model} />
+          </group>
         </group>
       </group>
-    </group>
+
+      {/* ── Neon tubelight rig (world-fixed, doesn't spin with the drone) ── */}
+      {/* Floor that catches the drone's shadow once the tube lights up. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -radius * 0.95, 0]} receiveShadow>
+        <planeGeometry args={[radius * 9, radius * 9]} />
+        <meshStandardMaterial color="#0b0d12" roughness={0.92} metalness={0.05} />
+      </mesh>
+
+      {/* The visible neon tube above the drone. */}
+      <mesh position={[0, radius * 1.35, 0]}>
+        <boxGeometry args={[radius * 2.6, radius * 0.055, radius * 0.13]} />
+        <meshStandardMaterial
+          ref={tubeMatRef}
+          color="#0a0f14"
+          emissive="#eaf6ff"
+          emissiveIntensity={0}
+          toneMapped={false}
+        />
+      </mesh>
+
+      {/* The light cast by the tube — illuminates the drone + throws its shadow. */}
+      <directionalLight
+        ref={lightRef}
+        position={[radius * 0.25, radius * 2.4, radius * 0.12]}
+        intensity={0}
+        color="#eaf6ff"
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-bias={-0.0004}
+        shadow-camera-near={0.1}
+        shadow-camera-far={radius * 7}
+        shadow-camera-left={-radius * 2.2}
+        shadow-camera-right={radius * 2.2}
+        shadow-camera-top={radius * 2.2}
+        shadow-camera-bottom={-radius * 2.2}
+      />
+
+      {/* Leader-line callout that tracks the selected component. */}
+      <group ref={trackerRef}>
+        {selected && (
+          <Html className="drone-callout" style={{ pointerEvents: 'none' }} zIndexRange={[120, 0]}>
+            <div className="drone-callout-inner">
+              <span className="drone-callout-dot" />
+              <span className="drone-callout-leader" />
+              <div className="drone-callout-box">
+                <h4>{selected.label || selected.nodeName}</h4>
+                {selected.description && <p>{selected.description}</p>}
+              </div>
+            </div>
+          </Html>
+        )}
+      </group>
+    </>
   );
 }
 
@@ -299,13 +433,28 @@ function Loader() {
 }
 
 /**
- * Full-screen black takeover holding the scroll-driven 3D drone.
- * Scroll progress is accumulated from wheel deltas (the page behind is locked),
- * so it works without a tall scroll container.
+ * Full-screen takeover holding the scroll-driven 3D drone. The background matches
+ * the site (navy) rather than black, and the drone is shifted right so the left
+ * holds the info panel. Scrolling drives the intro; once it completes the user
+ * can freely orbit, and the description + component list appear on the left.
  */
-export default function DroneExperience({ onClose, modelUrl = DEFAULT_MODEL_URL }) {
+export default function DroneExperience({
+  onClose,
+  modelUrl = DEFAULT_MODEL_URL,
+  name = '',
+  description = '',
+  components = [],
+}) {
   const overlayRef = useRef(null);
   const progressRef = useRef(0); // 0..1 target progress, driven by the wheel
+  const [interactive, setInteractive] = useState(false);
+  const [selected, setSelected] = useState(null); // selected component object
+
+  // Entering free-orbit reveals the panel; leaving it clears any selection.
+  const handleComplete = (done) => {
+    setInteractive(done);
+    if (!done) setSelected(null);
+  };
 
   useEffect(() => {
     const el = overlayRef.current;
@@ -319,36 +468,80 @@ export default function DroneExperience({ onClose, modelUrl = DEFAULT_MODEL_URL 
     el?.addEventListener('wheel', onWheel, { passive: false });
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    // Hide the page content behind the transparent overlay so only the site's
+    // Silk background shows through (the class is handled in the CSS).
+    document.body.classList.add('drone-open');
     return () => {
       document.removeEventListener('keydown', onKey);
       el?.removeEventListener('wheel', onWheel);
       document.body.style.overflow = prevOverflow;
+      document.body.classList.remove('drone-open');
     };
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div className="drone-experience" ref={overlayRef} role="dialog" aria-modal="true">
       <button className="drone-experience-close" onClick={onClose} aria-label="Close">×</button>
-      <div className="drone-experience-hint">Scroll to explode & rotate · Esc to close</div>
+      <div className="drone-experience-hint">
+        {interactive ? 'Drag to rotate · scroll up to replay · Esc to close' : 'Scroll to explode & rotate · Esc to close'}
+      </div>
+
+      <div className="drone-hud" aria-hidden="true">
+        <div>┌─ DRONE.VIEWER ─────────</div>
+        <div>│ model   : {name || 'unknown'}</div>
+        <div>│ parts   : {components.length} mapped</div>
+        <div>│ status  : {interactive ? 'READY' : 'RENDERING'}</div>
+        <div>└─ {interactive ? 'select a component' : 'scroll to inspect'} <span className="drone-hud-cursor">▮</span></div>
+      </div>
+
+      {/* Info panel — appears once the intro animation finishes. */}
+      {interactive && (
+        <div className="drone-panel">
+          {name && <h2 className="drone-panel-name">{name}</h2>}
+          {description && <p className="drone-panel-desc">{description}</p>}
+          {components.length > 0 && (
+            <div className="drone-components">
+              <h3 className="drone-components-title">Components</h3>
+              {components.map((c) => (
+                <button
+                  key={c.nodeName}
+                  type="button"
+                  className={`drone-component-item ${selected?.nodeName === c.nodeName ? 'active' : ''}`}
+                  onClick={() => setSelected(selected?.nodeName === c.nodeName ? null : c)}
+                >
+                  {c.label || c.nodeName}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <Canvas
+        shadows
         camera={{ fov: 45, position: [0, 0.3, 1.4], near: 0.01, far: 100 }}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        gl={{ antialias: true, powerPreference: 'high-performance', alpha: true }}
         dpr={[1, 2]}
       >
-        <color attach="background" args={['#000000']} />
-        <ambientLight intensity={0.35} />
-        <hemisphereLight skyColor="#cfe8ff" groundColor="#101018" intensity={0.4} />
-        <directionalLight position={[5, 8, 6]} intensity={1.3} />
-        <directionalLight position={[-6, 3, -4]} intensity={0.6} color="#9ec5ff" />
+        {/* Dim base light during the intro; the tubelight provides the drama. */}
+        <ambientLight intensity={0.2} />
+        <hemisphereLight skyColor="#bcd6ff" groundColor="#0a0a12" intensity={0.22} />
+        <directionalLight position={[5, 8, 6]} intensity={0.65} />
+        <directionalLight position={[-6, 3, -4]} intensity={0.3} color="#9ec5ff" />
 
         <Suspense fallback={<Loader />}>
-          {/* Studio HDR gives the metals (motors, standoffs, carbon) real
-              reflections; background stays black via <color> above. */}
-          <Environment preset="warehouse" />
-          <DroneModel progressRef={progressRef} modelUrl={modelUrl} />
+          {/* Studio HDR gives the metals subtle reflections without washing out the black. */}
+          <Environment preset="warehouse" environmentIntensity={0.45} />
+          <DroneModel progressRef={progressRef} modelUrl={modelUrl} onComplete={handleComplete} selected={selected} />
         </Suspense>
+
+        {/* Free-orbit only after the intro completes; wheel stays reserved for
+            the timeline (so scrolling up replays), hence zoom off. */}
+        {interactive && (
+          <OrbitControls makeDefault enablePan={false} enableZoom={false} enableDamping dampingFactor={0.1} />
+        )}
       </Canvas>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -74,7 +74,13 @@ const Drones = () => {
 
       {selected && (
         <Suspense fallback={null}>
-          <DroneExperience modelUrl={selected.modelUrl} onClose={() => setSelected(null)} />
+          <DroneExperience
+            modelUrl={selected.modelUrl}
+            name={selected.name}
+            description={selected.longDescription || selected.description || ''}
+            components={selected.components || []}
+            onClose={() => setSelected(null)}
+          />
         </Suspense>
       )}
     </div>
