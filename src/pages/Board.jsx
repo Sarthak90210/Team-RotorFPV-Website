@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import GlassSurface from '../components/GlassSurface';
 import ShinyText from '../components/ShinyText';
 import TiltedCard from '../components/TiltedCard';
-import { FaLinkedin } from 'react-icons/fa';
+import { FaLinkedin, FaGithub } from 'react-icons/fa';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import './Board.css';
@@ -41,9 +41,16 @@ const MemberCard = ({ member }) => {
           <h3 className="member-name-text">{member.name}</h3>
           <p className="member-role-text">{member.role}</p>
           {member.jobTitle && <p className="member-job-title">{member.jobTitle}</p>}
-          <a href={member.linkedin} className="member-linkedin" target="_blank" rel="noreferrer">
-            <FaLinkedin size={24} />
-          </a>
+          <div className="member-socials">
+            <a href={member.linkedin} className="member-linkedin" target="_blank" rel="noreferrer">
+              <FaLinkedin size={24} />
+            </a>
+            {member.github && (
+              <a href={member.github} className="member-github" target="_blank" rel="noreferrer">
+                <FaGithub size={24} />
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </GlassSurface>

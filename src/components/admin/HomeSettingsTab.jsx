@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { uploadFile, deleteCloudinaryImage } from '../../lib/adminApi';
+import EventsTab from './EventsTab';
 
 const EMPTY_SETTINGS = {
   backgroundVideoUrl: '',
@@ -13,6 +14,8 @@ const EMPTY_SETTINGS = {
 const HomeSettingsTab = ({ user }) => {
   const [homeSettings, setHomeSettings] = useState(EMPTY_SETTINGS);
   const [homeVideoUrl, setHomeVideoUrl] = useState('');
+  const [aboutUs, setAboutUs] = useState('');
+  const [isSavingAbout, setIsSavingAbout] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const homeVideoInputRef = useRef(null);
 
@@ -21,15 +24,35 @@ const HomeSettingsTab = ({ user }) => {
       if (docSnap.exists()) {
         setHomeSettings(docSnap.data());
         setHomeVideoUrl(docSnap.data().backgroundVideoUrl || '');
+        setAboutUs(docSnap.data().aboutUs || '');
       } else {
         setHomeSettings(EMPTY_SETTINGS);
         setHomeVideoUrl('');
+        setAboutUs('');
       }
     }, (error) => {
       console.error("Error fetching home settings:", error);
     });
     return () => unsub();
   }, []);
+
+  const handleAboutSubmit = async (e) => {
+    e.preventDefault();
+    setIsSavingAbout(true);
+    try {
+      await setDoc(doc(db, 'settings', 'home'), {
+        aboutUs: aboutUs,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.email
+      }, { merge: true });
+      alert("About Us section updated successfully!");
+    } catch (error) {
+      console.error("Error updating About Us:", error);
+      alert("Failed to update About Us text.");
+    } finally {
+      setIsSavingAbout(false);
+    }
+  };
 
   const handleHomeVideoUpload = async (e) => {
     const file = e.target.files[0];
@@ -101,6 +124,7 @@ const HomeSettingsTab = ({ user }) => {
   };
 
   return (
+    <>
     <div className="admin-single">
       <div className="admin-glass-panel form-panel">
         <h2>Home Page Settings</h2>
@@ -172,8 +196,43 @@ const HomeSettingsTab = ({ user }) => {
             </p>
           )}
         </div>
+
+        <div className="settings-section stack-lg">
+          <h3 className="admin-subhead">About Us Section</h3>
+          <p className="field-hint">
+            This paragraph appears in the "About Us" section below the video on the home page.
+            Leave blank to show the default text. Use a blank line to separate paragraphs.
+          </p>
+
+          <form onSubmit={handleAboutSubmit} className="admin-form">
+            <div className="form-group">
+              <label>About Us Text</label>
+              <textarea
+                value={aboutUs}
+                onChange={(e) => setAboutUs(e.target.value)}
+                placeholder="Tell visitors about Team Rotor FPV…"
+                rows={8}
+              />
+            </div>
+
+            <div className="form-actions">
+              <button type="submit" className="admin-btn primary" disabled={isSavingAbout}>
+                {isSavingAbout ? 'Saving…' : 'Save About Us'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
+
+    <div className="admin-section-heading">
+      <h2>Events Section</h2>
+      <p className="field-hint">
+        Manage the Upcoming and Past events shown on the home page. Each event has an image, name, and description.
+      </p>
+    </div>
+    <EventsTab user={user} />
+    </>
   );
 };
 

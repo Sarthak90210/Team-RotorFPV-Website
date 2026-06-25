@@ -468,6 +468,64 @@ app.post('/api/delete-asset', verifyAdmin, async (req, res) => {
   }
 });
 
+// 📦 Move/rename a Cloudinary asset into a different folder (admin-only) 📦
+// Used when an item's organizing folder should change (e.g. switching an event
+// between Upcoming/Past). Keeps the original asset basename, only swaps the folder.
+// `toFolder` is relative (without the team-rotor/ prefix), matching /api/upload.
+app.post('/api/move-asset', verifyAdmin, async (req, res) => {
+  try {
+    const { url, toFolder } = req.body;
+    if (!url || !toFolder) {
+      return res.status(400).json({ error: 'url and toFolder are required' });
+    }
+
+    const currentPublicId = getPublicIdFromUrl(url);
+    // Externally pasted (non-Cloudinary) URLs can't be moved — return as-is.
+    if (!currentPublicId) {
+      return res.json({ result: 'skipped', secure_url: url });
+    }
+
+    const basename = currentPublicId.split('/').pop();
+    const targetFolder = `team-rotor/${toFolder}`;
+    const newPublicId = `${targetFolder}/${basename}`;
+
+    // Already in the right place — nothing to do.
+    if (newPublicId === currentPublicId) {
+      return res.json({ result: 'unchanged', secure_url: url });
+    }
+
+    // Cloudinary rename defaults to resource_type 'image'. Fall back to
+    // video/raw if the asset isn't an image (mirrors /api/delete-asset).
+    let result;
+    try {
+      result = await cloudinary.uploader.rename(currentPublicId, newPublicId, { overwrite: true });
+    } catch {
+      try {
+        result = await cloudinary.uploader.rename(currentPublicId, newPublicId, { overwrite: true, resource_type: 'video' });
+      } catch {
+        result = await cloudinary.uploader.rename(currentPublicId, newPublicId, { overwrite: true, resource_type: 'raw' });
+      }
+    }
+
+    // Re-apply the same delivery transformation used on upload so the optimized
+    // URL stays consistent with everything else in the app.
+    let optimizedUrl = result.secure_url;
+    if (result.resource_type === 'video') {
+      const parts = result.secure_url.split('/upload/');
+      optimizedUrl = `${parts[0]}/upload/f_auto,q_auto:eco/${parts[1]}`;
+    } else if (result.resource_type === 'image') {
+      const parts = result.secure_url.split('/upload/');
+      optimizedUrl = `${parts[0]}/upload/c_limit,w_1200,f_auto,q_auto/${parts[1]}`;
+    }
+
+    console.log('[Cloudinary Move]', { from: currentPublicId, to: result.public_id });
+    res.json({ result: 'ok', secure_url: optimizedUrl, public_id: result.public_id, resource_type: result.resource_type });
+  } catch (error) {
+    console.error('[Cloudinary Move] Error:', error);
+    res.status(500).json({ error: error.message || 'Move failed' });
+  }
+});
+
 // ── Contact Us Endpoint ──
 const resend = new Resend(process.env.RESEND_API_KEY);
 

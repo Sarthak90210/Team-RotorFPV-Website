@@ -16,6 +16,7 @@ const EMPTY_MEMBER_FORM = {
   jobTitle: '',
   image: '',
   linkedin: '',
+  github: '',
   category: 'leaders',
   order: 0,
   isActive: true
@@ -116,6 +117,7 @@ const TeamTab = () => {
       jobTitle: item.jobTitle || '',
       image: item.image || '',
       linkedin: item.linkedin || '',
+      github: item.github || '',
       category: item.category || 'leaders',
       order: item.order || 0,
       isActive: item.isActive !== false // default to true if undefined
@@ -148,6 +150,7 @@ const TeamTab = () => {
       jobTitle: teamMemberFormData.jobTitle,
       image: teamMemberFormData.image,
       linkedin: teamMemberFormData.linkedin,
+      github: teamMemberFormData.github,
       category: teamMemberFormData.category,
       order: Number(teamMemberFormData.order),
       isActive: teamMemberFormData.isActive,
@@ -378,6 +381,17 @@ const TeamTab = () => {
                     value={teamMemberFormData.linkedin}
                     onChange={handleTeamMemberInputChange}
                     placeholder="https://linkedin.com/in/..."
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>GitHub URL (optional)</label>
+                  <input
+                    type="url"
+                    name="github"
+                    value={teamMemberFormData.github}
+                    onChange={handleTeamMemberInputChange}
+                    placeholder="https://github.com/..."
                   />
                 </div>
 

@@ -1,72 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, useMotionValue, useSpring } from 'motion/react';
+import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import ShinyText from '../components/ShinyText';
 import SpotlightCard from '../components/SpotlightCard';
+import LogoLoop from '../components/LogoLoop';
 import { Cpu, Code, Factory } from 'lucide-react';
 import './SponsorUs.css';
-
-const springValues = { damping: 30, stiffness: 100, mass: 2 };
-
-const TiltWrapper = ({ children, rotateAmplitude = 14, scaleOnHover = 1.05 }) => {
-  const ref = useRef(null);
-  const rotateX = useSpring(useMotionValue(0), springValues);
-  const rotateY = useSpring(useMotionValue(0), springValues);
-  const scale = useSpring(1, springValues);
-
-  function handleMouse(e) {
-    if (!ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    const offsetX = e.clientX - rect.left - rect.width / 2;
-    const offsetY = e.clientY - rect.top - rect.height / 2;
-    const rotationX = (offsetY / (rect.height / 2)) * -rotateAmplitude;
-    const rotationY = (offsetX / (rect.width / 2)) * rotateAmplitude;
-    rotateX.set(rotationX);
-    rotateY.set(rotationY);
-  }
-
-  function handleMouseEnter() { scale.set(scaleOnHover); }
-  function handleMouseLeave() {
-    scale.set(1);
-    rotateX.set(0);
-    rotateY.set(0);
-  }
-
-  return (
-    <div style={{ perspective: 1200 }} className="partner-tilt-container">
-      <motion.div
-        ref={ref}
-        onMouseMove={handleMouse}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        style={{ rotateX, rotateY, scale, transformStyle: 'preserve-3d' }}
-        className="partner-tilt-inner"
-      >
-        {children}
-      </motion.div>
-    </div>
-  );
-};
-
-const SponsorCard = ({ sponsor }) => {
-  return (
-    <TiltWrapper rotateAmplitude={12} scaleOnHover={1.05}>
-      <a href={sponsor.website} target="_blank" rel="noopener noreferrer" className="partner-link">
-        <div className="partner-card">
-          <div className="partner-logo-container">
-            <img src={sponsor.logo} alt={sponsor.name} className="partner-logo" />
-          </div>
-          <div className="partner-info-below">
-            <h3 className="partner-name-text">{sponsor.name}</h3>
-            <p className="partner-click-text">Visit Website</p>
-          </div>
-        </div>
-      </a>
-    </TiltWrapper>
-  );
-};
 
 const SponsorUs = () => {
   const [sponsors, setSponsors] = useState([]);
@@ -252,10 +192,34 @@ const SponsorUs = () => {
         </h2>
         
         {sponsors.length > 0 ? (
-          <div className="partners-grid">
-            {sponsors.map((sponsor) => (
-              <SponsorCard key={sponsor.id} sponsor={sponsor} />
-            ))}
+          <div className="sponsors-loop">
+            <LogoLoop
+              logos={sponsors.map((sponsor) => ({
+                src: sponsor.logo,
+                alt: sponsor.name,
+                title: sponsor.name,
+                href: sponsor.website
+              }))}
+              speed={80}
+              direction="left"
+              logoHeight={64}
+              gap={80}
+              hoverSpeed={0}
+              scaleOnHover
+              ariaLabel="Our sponsors"
+              renderItem={(item) => (
+                <a
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="sponsor-loop-link"
+                  aria-label={item.title}
+                >
+                  <img src={item.src} alt={item.alt} className="sponsor-loop-logo" draggable={false} />
+                  <span className="sponsor-loop-name">{item.title}</span>
+                </a>
+              )}
+            />
           </div>
         ) : (
           <div className="no-partners">

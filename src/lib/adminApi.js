@@ -57,6 +57,27 @@ export async function deleteCloudinaryImage(url) {
   }
 }
 
+// Move a Cloudinary asset into a different folder (e.g. when switching an event
+// between Upcoming/Past). Returns the new optimized URL, or the original URL
+// unchanged for non-Cloudinary links or on failure (best-effort, never throws).
+export async function moveCloudinaryImage(url, toFolder) {
+  if (!url || !url.includes('res.cloudinary.com')) return url;
+  try {
+    const { ok, data } = await apiPost('/api/move-asset', { url, toFolder });
+    if (ok && data.secure_url) return data.secure_url;
+    return url;
+  } catch (error) {
+    console.error({
+      action: 'cloudinary_move_failed',
+      url,
+      toFolder,
+      error: error.message || error,
+      timestamp: new Date().toISOString(),
+    });
+    return url;
+  }
+}
+
 // GET JSON from the admin backend with the caller's Firebase ID token.
 // Returns { ok, data }. Never throws on HTTP status — only on network failure.
 export async function apiGet(path) {

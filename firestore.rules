@@ -37,6 +37,11 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /events/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
     match /contact_messages/{docId} {
       allow read, write: if isAdmin();
     }

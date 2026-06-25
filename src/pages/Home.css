@@ -9,12 +9,14 @@
   margin-top: -100px; /* Pull up under navbar */
 }
 
+/* The video is a fixed, stationary full-screen backdrop. It never moves or
+   shrinks — the page content (About, Events) scrolls up and glides over it. */
 .video-background {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   z-index: -1;
 }
 
@@ -39,6 +41,9 @@
   text-align: center;
   padding: 0 2rem;
   margin-bottom: 12vh; /* Push up slightly from the very bottom edge */
+  /* Fade the quote out as the video shrinks on scroll (matches the hero motion). */
+  opacity: calc(1 - var(--hero-scroll, 0) * 1.4);
+  will-change: opacity;
 }
 
 .hero-quote {
@@ -69,9 +74,444 @@
   }
 }
 
+/* About Us section — transparent so the fixed video stays visible behind it
+   as the content glides over. */
+.about-section {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: transparent;
+  padding: 100px 2rem 120px;
+  display: flex;
+  justify-content: center;
+}
+
+.about-content {
+  max-width: 1100px;
+  width: 100%;
+  text-align: left;
+}
+
+/* Heading styled to match the Board page .year-title (left-aligned) */
+.about-title {
+  font-size: 2.5rem;
+  margin-bottom: 40px;
+  color: #fff;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 10px;
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+  text-decoration-thickness: 1px;
+}
+
+.about-paragraph {
+  font-size: 1.1rem;
+  line-height: 1.9;
+  color: var(--text-primary);
+  margin-bottom: 1.25rem;
+}
+
+.about-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+/* Events section — transparent so the fixed video stays visible behind it. */
+.events-section {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: transparent;
+  padding: 40px 2rem 120px;
+  display: flex;
+  justify-content: center;
+}
+
+.events-content {
+  max-width: 1500px;
+  width: 100%;
+}
+
+/* Heading styled to match the Board page .year-title (left-aligned) */
+.events-title {
+  font-size: 2.5rem;
+  margin-bottom: 50px;
+  color: #fff;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 10px;
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+  text-decoration-thickness: 1px;
+}
+
+.events-group {
+  margin-bottom: 60px;
+}
+
+.events-group:last-child {
+  margin-bottom: 0;
+}
+
+.events-subheading {
+  font-size: 1.6rem;
+  color: #fff;
+  margin-bottom: 28px;
+  padding-bottom: 10px;
+  position: relative;
+  display: inline-block;
+}
+
+.events-subheading::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 50px;
+  height: 3px;
+  background-color: var(--accent-blue);
+  border-radius: 2px;
+}
+
+/* Six cards per row, centered — incomplete rows stay centered (a grid would
+   left-align them). Card width is one sixth of the row minus the gaps. */
+.events-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 22px;
+}
+
+/* Event cards mirror the Board member card (GlassSurface + image). */
+.event-card-button {
+  width: calc((100% - 5 * 22px) / 6);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+/* The card inner is a PixelCard; strip its default sizing/border/background so
+   the card looks identical, and let it just provide the pixel shimmer canvas. */
+.event-card-inner.pixel-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  place-items: initial;
+  padding: 14px 12px 18px 12px;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.event-card-inner.pixel-card::before {
+  display: none; /* remove the radial dark hover glow */
+}
+
+/* Pixel shimmer sits above the image but below the text. */
+.event-card-inner .pixel-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.event-image-wrap {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.event-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.event-name-overlay {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  color: white;
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  font-family: 'Inter', sans-serif;
+}
+
+.event-info {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 18px;
+  width: 100%;
+  flex-grow: 1;
+}
+
+.event-name {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.event-desc {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Event detail modal ── */
+.event-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(5, 12, 24, 0.8);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: modalFade 0.25s ease;
+}
+
+@keyframes modalFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.event-modal {
+  position: relative;
+  width: min(900px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  animation: modalPop 0.25s ease;
+  /* Hide the scrollbar entirely while keeping the content scrollable. */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* old Edge/IE */
+}
+
+.event-modal::-webkit-scrollbar {
+  display: none; /* Chrome / Safari */
+}
+
+@keyframes modalPop {
+  from { transform: translateY(20px) scale(0.98); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.event-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 2;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(10, 25, 47, 0.6);
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.event-modal-close:hover {
+  background: var(--accent-blue);
+}
+
+.event-modal-gallery {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 18px 18px 0 0;
+  overflow: hidden;
+}
+
+.event-modal-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.event-modal-image.active {
+  opacity: 1;
+}
+
+.gallery-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(10, 25, 47, 0.55);
+  color: #fff;
+  font-size: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.gallery-nav:hover {
+  background: var(--accent-blue);
+}
+
+.gallery-nav.prev { left: 14px; }
+.gallery-nav.next { right: 14px; }
+
+.gallery-dots {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+}
+
+.gallery-dot {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.gallery-dot.active {
+  background: var(--accent-blue);
+  transform: scale(1.2);
+}
+
+.event-modal-body {
+  padding: 28px 32px 36px;
+}
+
+.event-status-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+}
+
+.event-status-badge.upcoming {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--accent-blue);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.event-status-badge.past {
+  background: rgba(136, 146, 176, 0.15);
+  color: var(--text-secondary);
+  border: 1px solid rgba(136, 146, 176, 0.35);
+}
+
+.event-modal-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 2rem;
+  color: #fff;
+  margin-bottom: 18px;
+}
+
+.event-modal-desc {
+  font-size: 1.05rem;
+  line-height: 1.85;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+}
+
+.event-modal-desc:last-child {
+  margin-bottom: 0;
+}
+
+/* Scale the 6-per-row event cards down as the viewport narrows. */
+@media (max-width: 1400px) {
+  .event-card-button { width: calc((100% - 3 * 22px) / 4); }
+}
+
+@media (max-width: 1000px) {
+  .event-card-button { width: calc((100% - 2 * 22px) / 3); }
+}
+
+@media (max-width: 680px) {
+  .event-card-button { width: calc((100% - 16px) / 2); }
+}
+
+@media (max-width: 440px) {
+  .event-card-button { width: 100%; }
+}
+
 @media screen and (max-width: 768px) {
   .hero-quote {
     font-size: 1.5rem;
     font-weight: 400; /* slightly thicker on mobile for readability */
+  }
+
+  .about-section {
+    padding: 70px 1.5rem 60px;
+  }
+
+  .about-title,
+  .events-title {
+    font-size: 2rem;
+  }
+
+  .about-paragraph {
+    font-size: 1rem;
+    line-height: 1.8;
+  }
+
+  .events-section {
+    padding: 20px 1.5rem 90px;
+  }
+
+  .events-grid {
+    gap: 16px;
+  }
+
+  .event-modal-body {
+    padding: 22px 20px 28px;
+  }
+
+  .event-modal-title {
+    font-size: 1.5rem;
   }
 }

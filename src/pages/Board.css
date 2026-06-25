@@ -132,16 +132,28 @@
   text-align: center;
 }
 
-.member-linkedin {
+.member-socials {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.member-linkedin,
+.member-github {
   color: white;
   transition: color 0.3s;
   background-color: transparent;
   padding: 5px;
   border-radius: 4px;
+  display: inline-flex;
 }
 
 .member-linkedin:hover {
   color: #0077b5;
+}
+
+.member-github:hover {
+  color: #6e5494;
 }
 
 /* Timeline Pill Container */
