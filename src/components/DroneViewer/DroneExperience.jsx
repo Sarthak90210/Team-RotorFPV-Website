@@ -20,7 +20,7 @@ const SCROLL_SENSITIVITY = 0.0006;
 const SMOOTHING = 0.08;
 // Camera choreography: it orbits OPPOSITE to the drone's spin while rising and
 // dipping, tracing a diagonal up-and-down arc over the full sequence.
-const CAM_DIST_FACTOR = 2.3; // distance from centre, in bounding-sphere radii
+const CAM_DIST_FACTOR = 2.6; // distance from centre, in bounding-sphere radii
 const CAM_ELEV_BASE = 0.30;  // resting elevation above the horizon (radians)
 const CAM_ELEV_AMP = 0.5;    // up/down swing amplitude (radians)
 // Shift the rendered subject toward the right (fraction of width) so the
@@ -33,10 +33,6 @@ const EXTRACT_DIST = 0.5;
 
 // Reused scratch vector for per-frame world-position reads (avoids allocations).
 const _worldPos = new THREE.Vector3();
-
-// Neon tubelight rig that switches on once the intro completes.
-const TUBE_LIGHT_MAX = 3.6;       // directional light intensity when fully lit
-const TUBE_EMISSIVE_MAX = 4.0;    // glow of the visible tube bar when fully lit
 // CAD (FreeCAD) is Z-up; three.js is Y-up. Tilt the model -90° about X so its
 // rotor plane lies flat → yaw about Y is then the correct horizontal spin.
 // If the drone appears upside-down, flip the sign to +Math.PI / 2.
@@ -184,9 +180,6 @@ function DroneModel({ progressRef, modelUrl, onComplete, selected }) {
   const piGltf = useGLTF('/RaspberryPi5_4GB.glb');
   const pivotRef = useRef();
   const trackerRef = useRef(); // follows the selected part for the callout anchor
-  const lightRef = useRef();   // tubelight (directional) — animates on at completion
-  const tubeMatRef = useRef(); // emissive bar material — glows on at completion
-  const litRef = useRef(0);    // 0..1 tubelight "on" amount
   const interactiveRef = useRef(false);
   const selectedRef = useRef(null);
   selectedRef.current = selected;
@@ -335,12 +328,6 @@ function DroneModel({ progressRef, modelUrl, onComplete, selected }) {
       camera.lookAt(0, 0, 0);
     }
 
-    // Tubelight switches on as the intro completes (light + visible glow).
-    const litGoal = isComplete ? 1 : 0;
-    litRef.current += (litGoal - litRef.current) * 0.05;
-    if (lightRef.current) lightRef.current.intensity = litRef.current * TUBE_LIGHT_MAX;
-    if (tubeMatRef.current) tubeMatRef.current.emissiveIntensity = litRef.current * TUBE_EMISSIVE_MAX;
-
     // Once complete, ease the projection so the drone slides to the right and
     // frees the left for the panel. Centred (offset 0) during the intro.
     const targetShift = isComplete ? 1 : 0;
@@ -363,42 +350,6 @@ function DroneModel({ progressRef, modelUrl, onComplete, selected }) {
         </group>
       </group>
 
-      {/* ── Neon tubelight rig (world-fixed, doesn't spin with the drone) ── */}
-      {/* Floor that catches the drone's shadow once the tube lights up. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -radius * 0.95, 0]} receiveShadow>
-        <planeGeometry args={[radius * 9, radius * 9]} />
-        <meshStandardMaterial color="#0b0d12" roughness={0.92} metalness={0.05} />
-      </mesh>
-
-      {/* The visible neon tube above the drone. */}
-      <mesh position={[0, radius * 1.35, 0]}>
-        <boxGeometry args={[radius * 2.6, radius * 0.055, radius * 0.13]} />
-        <meshStandardMaterial
-          ref={tubeMatRef}
-          color="#0a0f14"
-          emissive="#eaf6ff"
-          emissiveIntensity={0}
-          toneMapped={false}
-        />
-      </mesh>
-
-      {/* The light cast by the tube — illuminates the drone + throws its shadow. */}
-      <directionalLight
-        ref={lightRef}
-        position={[radius * 0.25, radius * 2.4, radius * 0.12]}
-        intensity={0}
-        color="#eaf6ff"
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-bias={-0.0004}
-        shadow-camera-near={0.1}
-        shadow-camera-far={radius * 7}
-        shadow-camera-left={-radius * 2.2}
-        shadow-camera-right={radius * 2.2}
-        shadow-camera-top={radius * 2.2}
-        shadow-camera-bottom={-radius * 2.2}
-      />
 
       {/* Leader-line callout that tracks the selected component. */}
       <group ref={trackerRef}>
@@ -501,7 +452,7 @@ export default function DroneExperience({
           {description && <p className="drone-panel-desc">{description}</p>}
           {components.length > 0 && (
             <div className="drone-components">
-              <h3 className="drone-components-title">Components</h3>
+              <h3 className="drone-components-title">// COMPONENTS</h3>
               {components.map((c) => (
                 <button
                   key={c.nodeName}
@@ -518,20 +469,18 @@ export default function DroneExperience({
       )}
 
       <Canvas
-        shadows
         camera={{ fov: 45, position: [0, 0.3, 1.4], near: 0.01, far: 100 }}
         gl={{ antialias: true, powerPreference: 'high-performance', alpha: true }}
         dpr={[1, 2]}
       >
-        {/* Dim base light during the intro; the tubelight provides the drama. */}
-        <ambientLight intensity={0.2} />
-        <hemisphereLight skyColor="#bcd6ff" groundColor="#0a0a12" intensity={0.22} />
-        <directionalLight position={[5, 8, 6]} intensity={0.65} />
-        <directionalLight position={[-6, 3, -4]} intensity={0.3} color="#9ec5ff" />
+        <ambientLight intensity={0.45} />
+        <hemisphereLight skyColor="#cfe8ff" groundColor="#101018" intensity={0.5} />
+        <directionalLight position={[5, 8, 6]} intensity={1.4} />
+        <directionalLight position={[-6, 3, -4]} intensity={0.7} color="#9ec5ff" />
 
         <Suspense fallback={<Loader />}>
-          {/* Studio HDR gives the metals subtle reflections without washing out the black. */}
-          <Environment preset="warehouse" environmentIntensity={0.45} />
+          {/* Studio HDR gives the metals real reflections against the black. */}
+          <Environment preset="warehouse" environmentIntensity={0.8} />
           <DroneModel progressRef={progressRef} modelUrl={modelUrl} onComplete={handleComplete} selected={selected} />
         </Suspense>
 
