@@ -38,6 +38,39 @@ export async function uploadFile(file, folder) {
   return { ok: res.ok, data };
 }
 
+// Upload a 3D model (.glb/.gltf) to Supabase Storage via the backend.
+// Returns { ok, data } where data is { url, path }.
+export async function uploadModel(file, folder) {
+  const idToken = await getIdToken();
+  const form = new FormData();
+  form.append('model', file);
+  if (folder) form.append('folder', folder);
+  const res = await fetch(`${API_URL}/api/upload-model`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${idToken}` },
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, data };
+}
+
+// Best-effort removal of a 3D model from Supabase Storage by its object path.
+// Never throws.
+export async function deleteModel(path) {
+  if (!path) return;
+  try {
+    const { ok, data } = await apiPost('/api/delete-model', { path });
+    if (!ok) throw new Error(data.error || 'Model delete failed');
+  } catch (error) {
+    console.error({
+      action: 'model_delete_failed',
+      path,
+      error: error.message || error,
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
 // Best-effort removal of an uploaded asset from Cloudinary.
 // No-ops for externally pasted (non-Cloudinary) URLs; never throws.
 export async function deleteCloudinaryImage(url) {

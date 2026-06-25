@@ -6,6 +6,7 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import Achievements from './pages/Achievements';
 import Events from './pages/Events';
+import Drones from './pages/Drones';
 import Admin from './pages/Admin';
 import Gallery from './pages/Gallery';
 import Board from './pages/Board';
@@ -79,6 +80,7 @@ function AppContent() {
           <Route path="/board" element={<Board />} />
           <Route path="/sponsor-us" element={<SponsorUs />} />
           <Route path="/events" element={<Events />} />
+          <Route path="/drones" element={<Drones />} />
           <Route path="/contact" element={<ContactRedirect />} />
           <Route path="/admin" element={<Admin />} />
         </Routes>

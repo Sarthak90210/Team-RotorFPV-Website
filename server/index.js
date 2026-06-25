@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
+import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import geoip from 'geoip-lite';
@@ -121,18 +122,32 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// ── Supabase Storage (large 3D model files; Cloudinary's free raw cap is 10 MB) ──
+// Uploads are signed with the service-role key on the server, never exposed to
+// the browser. The bucket is public-read so the models can be fetched by three.js.
+const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || 'drone-models';
+const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    })
+  : null;
+if (!supabase) {
+  console.warn('[Supabase] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set — 3D model uploads are disabled.');
+}
+
 // ── Multer configuration (memory storage, media up to 20 MB) ──
 const ALLOWED_MIME_TYPES = [
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'image/heic-sequence', 'image/avif',
   'video/mp4', 'video/webm', 'video/quicktime',
-  'application/octet-stream', '', 'application/pdf'
+  'application/octet-stream', '', 'application/pdf',
+  'model/gltf-binary', 'model/gltf+json' // 3D drone models (.glb/.gltf)
 ];
-const ALLOWED_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'avif', 'mp4', 'webm', 'mov', 'pdf'];
+const ALLOWED_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'avif', 'mp4', 'webm', 'mov', 'pdf', 'glb', 'gltf'];
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 20 * 1024 * 1024, // 20 MB
+    fileSize: 50 * 1024 * 1024, // 50 MB (3D models are large)
   },
   fileFilter: (req, file, cb) => {
     const ext = file.originalname ? file.originalname.split('.').pop().toLowerCase() : '';
@@ -144,7 +159,7 @@ const upload = multer({
     const isValidExt = ALLOWED_EXTS.includes(ext);
 
     if (!(isValidMime && isValidExt)) {
-      return cb(new Error('Only JPEG, PNG, WebP, GIF, HEIC, AVIF images, MP4/WebM/MOV videos, and PDF files are allowed.'));
+      return cb(new Error('Only JPEG, PNG, WebP, GIF, HEIC, AVIF images, MP4/WebM/MOV videos, PDF, and GLB/glTF 3D models are allowed.'));
     }
     cb(null, true);
   },
@@ -368,7 +383,8 @@ app.post('/api/upload', verifyAdmin, uploadLimiter, upload.single('image'), asyn
 
     const targetFolder = req.body.folder ? `team-rotor/${req.body.folder}` : 'team-rotor';
 
-    const isRaw = req.file.mimetype === 'application/pdf';
+    const uploadExt = req.file.originalname ? req.file.originalname.split('.').pop().toLowerCase() : '';
+    const isRaw = req.file.mimetype === 'application/pdf' || uploadExt === 'glb' || uploadExt === 'gltf';
     const rType = isRaw ? 'raw' : 'auto';
 
     const result = await new Promise((resolve, reject) => {
@@ -523,6 +539,55 @@ app.post('/api/move-asset', verifyAdmin, async (req, res) => {
   } catch (error) {
     console.error('[Cloudinary Move] Error:', error);
     res.status(500).json({ error: error.message || 'Move failed' });
+  }
+});
+
+// ── 3D model upload endpoint (admin-only, Supabase Storage) ──
+// GLB/glTF files are too large for Cloudinary's free raw tier, so they live in
+// a public Supabase bucket. Returns { url, path } — store both in Firestore so
+// the asset can be deleted later by `path`.
+app.post('/api/upload-model', verifyAdmin, uploadLimiter, upload.single('model'), async (req, res) => {
+  try {
+    if (!supabase) return res.status(503).json({ error: '3D model storage is not configured.' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const ext = req.file.originalname ? req.file.originalname.split('.').pop().toLowerCase() : '';
+    if (ext !== 'glb' && ext !== 'gltf') {
+      return res.status(400).json({ error: 'Only .glb or .gltf models are allowed.' });
+    }
+
+    // Sanitize the folder and build a collision-proof object path.
+    const folder = (req.body.folder || 'models').replace(/[^a-zA-Z0-9/_-]/g, '');
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const path = `${folder}/${unique}.${ext}`;
+    const contentType = ext === 'glb' ? 'model/gltf-binary' : 'model/gltf+json';
+
+    const { error: upErr } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .upload(path, req.file.buffer, { contentType, upsert: false });
+    if (upErr) throw upErr;
+
+    const { data } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
+    res.json({ url: data.publicUrl, path });
+  } catch (error) {
+    console.error('Model upload error:', error);
+    res.status(500).json({ error: error.message || 'Model upload failed' });
+  }
+});
+
+// ── Delete a 3D model from Supabase Storage by object path (admin-only) ──
+app.post('/api/delete-model', verifyAdmin, async (req, res) => {
+  try {
+    if (!supabase) return res.status(503).json({ error: '3D model storage is not configured.' });
+    const { path } = req.body;
+    if (!path) return res.status(400).json({ error: 'No path provided' });
+
+    const { error } = await supabase.storage.from(SUPABASE_BUCKET).remove([path]);
+    if (error) throw error;
+    res.json({ result: 'ok' });
+  } catch (error) {
+    console.error('Model delete error:', error);
+    res.status(500).json({ error: error.message || 'Model delete failed' });
   }
 });
 
@@ -746,7 +811,7 @@ app.get('/api/analytics', verifyAdmin, async (req, res) => {
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ error: 'File too large. Maximum size is 20 MB.' });
+      return res.status(413).json({ error: 'File too large. Maximum size is 50 MB.' });
     }
     return res.status(400).json({ error: err.message });
   }

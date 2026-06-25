@@ -1,0 +1,57 @@
+/* Full-screen black takeover for the interactive 3D drone. Sits above
+   everything (navbar included) while open. */
+.drone-experience {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  background: #000;
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+
+.drone-experience canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.drone-experience-close {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  z-index: 4001;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.drone-experience-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+  transform: scale(1.05);
+}
+
+.drone-experience-hint {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4001;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.drone-loader {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.95rem;
+  white-space: nowrap;
+}

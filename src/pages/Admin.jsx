@@ -3,6 +3,7 @@ import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from
 import { auth } from '../firebase';
 import HomeSettingsTab from '../components/admin/HomeSettingsTab';
 import EventsTab from '../components/admin/EventsTab';
+import DronesTab from '../components/admin/DronesTab';
 import AchievementsTab from '../components/admin/AchievementsTab';
 import GalleryTab from '../components/admin/GalleryTab';
 import TeamTab from '../components/admin/TeamTab';
@@ -19,6 +20,7 @@ const TABS = [
   { key: 'gallery', label: 'Gallery' },
   { key: 'team', label: 'Board' },
   { key: 'events', label: 'Events' },
+  { key: 'drones', label: 'Drones' },
   { key: 'sponsors', label: 'Sponsors' },
   { key: 'contact_messages', label: 'Contact Messages' },
   { key: 'traffic', label: 'Traffic' },
@@ -119,6 +121,7 @@ const Admin = () => {
       case 'gallery': return <GalleryTab />;
       case 'team': return <TeamTab />;
       case 'events': return <EventsTab user={user} />;
+      case 'drones': return <DronesTab user={user} />;
       case 'sponsors': return <SponsorsTab user={user} />;
       case 'contact_messages': return <ContactMessagesAdmin />;
       case 'traffic': return <TrafficTab />;
