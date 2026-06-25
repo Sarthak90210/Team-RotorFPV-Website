@@ -61,6 +61,12 @@
   letter-spacing: 1px;
 }
 
+/* Year steppers — hidden on desktop (scroll wheel handles it there), shown
+   only on phones where there is no wheel. They flank the pill on the right. */
+.fa-pill-arrow {
+  display: none;
+}
+
 /* Achievements List */
 .formal-achievements-list {
   display: flex;
@@ -170,6 +176,15 @@
   color: #E5E7EB;
 }
 
+/* Below ~1450px the navbar (max-width 1050px) reaches the corner where the year
+   pill would sit, so drop it beneath the navbar to avoid overlap. Above that, it
+   tucks into the top-left corner. */
+@media screen and (max-width: 1450px) {
+  .fa-pill-container {
+    top: 120px;
+  }
+}
+
 /* Responsive adjustments */
 @media screen and (max-width: 1200px) {
   .formal-achievement-item {
@@ -199,8 +214,47 @@
     height: auto;
     aspect-ratio: 16/9;
   }
-  
+}
+
+/* Phones: the view-switch pill is hidden, so move the year pill up under the
+   navbar, and reveal the tap arrows for changing years without a scroll wheel. */
+@media screen and (max-width: 768px) {
   .fa-pill-container {
-    top: 160px; /* Below the view switcher on mobile */
+    top: 118px;
+  }
+
+  .fa-pill-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    left: calc(100% + 10px);
+    width: 38px;
+    height: 32px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    color: #ffffff;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2000;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .fa-pill-arrow--up { top: 0; }
+  .fa-pill-arrow--down { bottom: 0; }
+
+  .fa-pill-arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .fa-pill-arrow:not(:disabled):active {
+    background: rgba(255, 255, 255, 0.18);
   }
 }

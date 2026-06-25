@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useIsMobile } from '../hooks/useIsMobile';
 import './ViewDropdown.css';
 
 const ViewDropdown = () => {
   const pillRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobile();
 
   const isInteractive = location.pathname === '/interactive-achievements';
   const isFormal = location.pathname === '/achievements';
@@ -51,6 +53,12 @@ const ViewDropdown = () => {
     pill.addEventListener('wheel', handleWheel, { passive: false });
     return () => pill.removeEventListener('wheel', handleWheel);
   }, [activeIndex, navigate]);
+
+  // The interactive view is disabled on mobile, so there's nothing to switch
+  // to — hide the view-switch pill entirely on phones.
+  if (isMobile) {
+    return null;
+  }
 
   // Only render on achievement pages
   if (!isInteractive && !isFormal) {

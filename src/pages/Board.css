@@ -205,36 +205,73 @@
   font-weight: 500;
 }
 
+/* Year steppers — hidden on desktop (scroll wheel handles it there), shown only
+   on phones where the pill moves to the top and there is no wheel. */
+.timeline-arrow {
+  display: none;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
+  /* Stack the page so the year selector can sit at the top, in-flow, instead of
+     floating over the roster from the side gutter. (The global `main` already
+     pads down past the fixed navbar, so the base top padding is enough here.) */
+  .team-page {
+    display: flex;
+    flex-direction: column;
+  }
+
   .team-content {
-    padding-right: 80px; /* Less space for right pill */
+    padding: 0 16px; /* symmetric so cards/headings stay centered on the viewport */
   }
 
   .timeline-pill-container {
-    right: 10px;
-  }
-  
-  .timeline-btn {
-    font-size: 0.85rem;
-    padding: 10px 5px;
-    width: 45px;
+    position: static;
+    order: -1;
+    top: auto;
+    right: auto;
+    transform: none;
+    align-self: center;
+    margin: 0 auto 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
   }
 
-  .team-header h1 {
-    font-size: 2.5rem;
+  .timeline-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 30px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    color: #ffffff;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .timeline-arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .timeline-arrow:not(:disabled):active {
+    background: rgba(255, 255, 255, 0.18);
   }
 }
 
 @media (max-width: 480px) {
   .team-content {
-    padding-right: 15px;
-    padding-top: 60px;
-  }
-
-  .timeline-pill-container {
-    right: 5px;
-    transform: translateY(-50%) scale(0.8);
+    padding: 0 12px;
   }
 
   .cylinder-item {

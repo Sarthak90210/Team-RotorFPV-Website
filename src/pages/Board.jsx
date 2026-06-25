@@ -275,6 +275,17 @@ const Board = () => {
 
   const activeData = teamData[activeYear] || { leaders: [], technical: [], essential: [] };
 
+  // Touch devices can't drive the pill with a scroll wheel, so the mobile arrows
+  // step through years directly. Years are sorted newest-first, so up goes to a
+  // newer year (lower index) and down to an older one.
+  const activeIndex = years.indexOf(activeYear);
+  const goToNewerYear = () => {
+    if (activeIndex > 0) changeYear(years[activeIndex - 1]);
+  };
+  const goToOlderYear = () => {
+    if (activeIndex >= 0 && activeIndex < years.length - 1) changeYear(years[activeIndex + 1]);
+  };
+
   return (
     <div className="team-page">
       <div className="team-content">
@@ -329,6 +340,17 @@ const Board = () => {
 
       {/* The Pill Timeline */}
       <div className="timeline-pill-container" ref={pillRef}>
+        {/* Mobile-only year steppers (no scroll wheel on touch) */}
+        <button
+          type="button"
+          className="timeline-arrow timeline-arrow--up"
+          onClick={goToNewerYear}
+          disabled={activeIndex <= 0}
+          aria-label="Newer year"
+        >
+          ▲
+        </button>
+
         <GlassSurface
           width={100}
           height={130}
@@ -342,7 +364,6 @@ const Board = () => {
         >
           <div className="cylinder-container">
             {years.map((year, index) => {
-              const activeIndex = years.indexOf(activeYear);
               const offset = index - activeIndex;
               const isVisible = Math.abs(offset) <= 2;
               
@@ -364,6 +385,16 @@ const Board = () => {
             })}
           </div>
         </GlassSurface>
+
+        <button
+          type="button"
+          className="timeline-arrow timeline-arrow--down"
+          onClick={goToOlderYear}
+          disabled={activeIndex >= years.length - 1}
+          aria-label="Older year"
+        >
+          ▼
+        </button>
       </div>
 
       {showExBoardOverlay && (

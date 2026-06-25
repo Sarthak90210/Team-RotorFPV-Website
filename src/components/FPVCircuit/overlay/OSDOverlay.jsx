@@ -216,7 +216,10 @@ export const OSDOverlay = ({ progress, allIslandsData }) => {
             letter-spacing: 1px;
           }
           
-          @media screen and (max-width: 1100px) {
+          /* Below ~1450px the navbar (max-width 1050px) reaches the corner where
+             the pill would sit, so drop the pill beneath the navbar to avoid
+             overlapping it. Above that, it tucks into the top-left corner. */
+          @media screen and (max-width: 1450px) {
             .osd-pill-container {
               top: 120px;
             }

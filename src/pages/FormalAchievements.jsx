@@ -56,6 +56,18 @@ const FormalAchievements = () => {
 
   const activeIndex = availableYears.indexOf(selectedYear);
 
+  // Touch devices can't drive the year pill with a scroll wheel, so the mobile
+  // arrows step through years directly. Years are sorted newest-first, so the
+  // up arrow goes to a newer year (lower index) and down to an older one.
+  const goToNewerYear = () => {
+    if (activeIndex > 0) setSelectedYear(availableYears[activeIndex - 1]);
+  };
+  const goToOlderYear = () => {
+    if (activeIndex >= 0 && activeIndex < availableYears.length - 1) {
+      setSelectedYear(availableYears[activeIndex + 1]);
+    }
+  };
+
   useEffect(() => {
     if (selectedYear) {
       sessionStorage.setItem('shared_year', selectedYear);
@@ -115,7 +127,7 @@ const FormalAchievements = () => {
             {availableYears.map((year, index) => {
               const offset = index - activeIndex;
               const isVisible = Math.abs(offset) <= 2;
-              
+
               return (
                 <div
                   key={year}
@@ -133,6 +145,26 @@ const FormalAchievements = () => {
               );
             })}
           </div>
+
+          {/* Mobile-only year steppers (no scroll wheel on touch) */}
+          <button
+            type="button"
+            className="fa-pill-arrow fa-pill-arrow--up"
+            onClick={goToNewerYear}
+            disabled={activeIndex <= 0}
+            aria-label="Newer year"
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            className="fa-pill-arrow fa-pill-arrow--down"
+            onClick={goToOlderYear}
+            disabled={activeIndex >= availableYears.length - 1}
+            aria-label="Older year"
+          >
+            ▼
+          </button>
         </div>
       )}
 

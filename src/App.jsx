@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
+import { useIsMobile } from './hooks/useIsMobile';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
@@ -13,6 +14,29 @@ import FormalAchievements from './pages/FormalAchievements';
 import ViewDropdown from './components/ViewDropdown';
 import Silk from './components/Silk';
 import MobileOverlay from './components/MobileOverlay';
+
+// The contact form moved to the home page. Keep old /contact links working by
+// redirecting to home and scrolling to the contact section.
+function ContactRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate('/', { replace: true });
+    const t = setTimeout(() => {
+      document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [navigate]);
+  return null;
+}
+
+// The interactive FPV experience is desktop-only — on phones it's heavy and the
+// scroll-driven flight doesn't translate to touch, so we fall back to the formal
+// achievements page (the default achievements view on mobile).
+function InteractiveAchievementsRoute() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <Navigate to="/achievements" replace />;
+  return <Achievements />;
+}
 
 function AppContent() {
   const location = useLocation();
@@ -51,10 +75,11 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/achievements" element={<FormalAchievements />} />
-          <Route path="/interactive-achievements" element={<Achievements />} />
+          <Route path="/interactive-achievements" element={<InteractiveAchievementsRoute />} />
           <Route path="/board" element={<Board />} />
           <Route path="/sponsor-us" element={<SponsorUs />} />
           <Route path="/events" element={<Events />} />
+          <Route path="/contact" element={<ContactRedirect />} />
           <Route path="/admin" element={<Admin />} />
         </Routes>
       </main>

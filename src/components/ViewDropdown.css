@@ -42,8 +42,11 @@
   letter-spacing: 1px;
 }
 
-@media screen and (max-width: 1100px) {
+/* Below ~1450px the navbar (max-width 1050px) reaches the corner where the pill
+   would sit, so drop it beneath the navbar to avoid overlap. Above that, it
+   tucks into the top-right corner. */
+@media screen and (max-width: 1450px) {
   .view-pill-container {
-    top: 120px; /* Below mobile navbar */
+    top: 120px;
   }
 }
