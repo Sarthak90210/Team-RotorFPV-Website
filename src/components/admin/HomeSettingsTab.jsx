@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { uploadFile, deleteCloudinaryImage } from '../../lib/adminApi';
-import EventsTab from './EventsTab';
 
 const EMPTY_SETTINGS = {
   backgroundVideoUrl: '',
@@ -124,7 +123,6 @@ const HomeSettingsTab = ({ user }) => {
   };
 
   return (
-    <>
     <div className="admin-single">
       <div className="admin-glass-panel form-panel">
         <h2>Home Page Settings</h2>
@@ -224,15 +222,6 @@ const HomeSettingsTab = ({ user }) => {
         </div>
       </div>
     </div>
-
-    <div className="admin-section-heading">
-      <h2>Events Section</h2>
-      <p className="field-hint">
-        Manage the Upcoming and Past events shown on the home page. Each event has an image, name, and description.
-      </p>
-    </div>
-    <EventsTab user={user} />
-    </>
   );
 };
 

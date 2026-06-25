@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 import HomeSettingsTab from '../components/admin/HomeSettingsTab';
+import EventsTab from '../components/admin/EventsTab';
 import AchievementsTab from '../components/admin/AchievementsTab';
 import GalleryTab from '../components/admin/GalleryTab';
 import TeamTab from '../components/admin/TeamTab';
@@ -17,6 +18,7 @@ const TABS = [
   { key: 'achievements', label: 'Achievements' },
   { key: 'gallery', label: 'Gallery' },
   { key: 'team', label: 'Board' },
+  { key: 'events', label: 'Events' },
   { key: 'sponsors', label: 'Sponsors' },
   { key: 'contact_messages', label: 'Contact Messages' },
   { key: 'traffic', label: 'Traffic' },
@@ -116,6 +118,7 @@ const Admin = () => {
       case 'achievements': return <AchievementsTab />;
       case 'gallery': return <GalleryTab />;
       case 'team': return <TeamTab />;
+      case 'events': return <EventsTab user={user} />;
       case 'sponsors': return <SponsorsTab user={user} />;
       case 'contact_messages': return <ContactMessagesAdmin />;
       case 'traffic': return <TrafficTab />;
