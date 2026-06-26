@@ -4,6 +4,8 @@ import { db } from '../firebase';
 import { useIsMobile } from '../hooks/useIsMobile';
 import ShinyText from '../components/ShinyText';
 import TiltedCard from '../components/TiltedCard';
+import Seo from '../components/Seo';
+import ErrorBoundary from '../components/ErrorBoundary';
 import './Drones.css';
 
 // The 3D experience pulls in three/drei — load it only when a card is opened.
@@ -38,6 +40,7 @@ const DroneCard = ({ drone, onClick }) => (
 const Drones = () => {
   const [drones, setDrones] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selected, setSelected] = useState(null);
   const [mobileNotice, setMobileNotice] = useState(false);
   const isMobile = useIsMobile();
@@ -56,9 +59,11 @@ const Drones = () => {
         .map((d) => ({ id: d.id, ...d.data() }))
         .filter((d) => d.isActive !== false && d.modelUrl);
       setDrones(all);
+      setLoadError(false);
       setLoading(false);
     }, (error) => {
       console.error('Error fetching drones:', error);
+      setLoadError(true);
       setLoading(false);
     });
     return () => unsub();
@@ -66,6 +71,7 @@ const Drones = () => {
 
   return (
     <div className="drones-page">
+      <Seo title="Drones" description="Explore Team RotorFPV's custom-built racing drones in interactive 3D — frames, motors, and electronics designed and assembled by the team." />
       <div className="drones-content">
         <h2 className="drones-title">
           <ShinyText text="Drones" speed={3} />
@@ -77,21 +83,47 @@ const Drones = () => {
           ))}
         </div>
 
-        {!loading && drones.length === 0 && (
+        {!loading && loadError && (
+          <p className="drones-empty">Couldn't load drones right now. Please refresh to try again.</p>
+        )}
+        {!loading && !loadError && drones.length === 0 && (
           <p className="drones-empty">No drones to show yet. Check back soon!</p>
         )}
       </div>
 
       {selected && (
-        <Suspense fallback={null}>
-          <DroneExperience
-            modelUrl={selected.modelUrl}
-            name={selected.name}
-            description={selected.longDescription || selected.description || ''}
-            components={selected.components || []}
-            onClose={() => setSelected(null)}
-          />
-        </Suspense>
+        <ErrorBoundary
+          onReset={() => setSelected(null)}
+          fallback={
+            <div className="drone-mobile-notice" role="alert" onClick={() => setSelected(null)}>
+              <div className="drone-mobile-notice-box" onClick={(e) => e.stopPropagation()}>
+                <div className="drone-mobile-notice-icon">⚠️</div>
+                <h3>Couldn't load the 3D viewer</h3>
+                <p>The model failed to load. Please check your connection and try again.</p>
+                <button type="button" className="drone-mobile-notice-btn" onClick={() => setSelected(null)}>Close</button>
+              </div>
+            </div>
+          }
+        >
+          <Suspense
+            fallback={
+              <div className="drone-mobile-notice" role="status" aria-live="polite">
+                <div className="drone-mobile-notice-box">
+                  <div className="drone-mobile-notice-icon">🛠️</div>
+                  <h3>Loading 3D viewer…</h3>
+                </div>
+              </div>
+            }
+          >
+            <DroneExperience
+              modelUrl={selected.modelUrl}
+              name={selected.name}
+              description={selected.longDescription || selected.description || ''}
+              components={selected.components || []}
+              onClose={() => setSelected(null)}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {mobileNotice && (

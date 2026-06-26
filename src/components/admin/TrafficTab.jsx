@@ -55,20 +55,8 @@ const TrafficTab = () => {
   }, []);
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      setLoading(true);
-      try {
-        const result = await fetchAnalytics();
-        if (active) setData(result);
-      } catch (err) {
-        if (active) setError(err.message || 'Failed to load analytics');
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
+    load();
+  }, [load]);
 
   const stats = data
     ? [

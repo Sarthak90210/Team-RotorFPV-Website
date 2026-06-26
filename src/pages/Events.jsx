@@ -4,6 +4,7 @@ import { db } from '../firebase';
 import ShinyText from '../components/ShinyText';
 import GlassSurface from '../components/GlassSurface';
 import PixelCard from '../components/PixelCard';
+import Seo from '../components/Seo';
 import './Events.css';
 
 const EventCard = ({ event, onClick }) => (
@@ -40,6 +41,20 @@ const EventModal = ({ event, onClose }) => {
   const images = [...new Set([event.image, ...(event.galleryImages || [])].filter(Boolean))];
   const longDesc = event.longDescription?.trim() ? event.longDescription : (event.description || '');
 
+  // Only fetch the current image and its immediate neighbours (plus anything
+  // already viewed). Avoids downloading an entire 20+ image gallery on open,
+  // while keeping arrow/dot navigation instant once a slide has loaded.
+  const [loaded, setLoaded] = useState(() => new Set([0]));
+  useEffect(() => {
+    setLoaded((prev) => {
+      const next = new Set(prev);
+      next.add(index);
+      next.add((index + 1) % images.length);
+      next.add((index - 1 + images.length) % images.length);
+      return next;
+    });
+  }, [index, images.length]);
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
@@ -69,8 +84,10 @@ const EventModal = ({ event, onClose }) => {
           {images.map((src, i) => (
             <img
               key={src}
-              src={src}
+              src={loaded.has(i) ? src : undefined}
               alt={`${event.name} ${i + 1}`}
+              loading="lazy"
+              decoding="async"
               className={`event-modal-image ${i === index ? 'active' : ''}`}
             />
           ))}
@@ -112,6 +129,7 @@ const EventModal = ({ event, onClose }) => {
 const Events = () => {
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     const qEvents = query(collection(db, 'events'), orderBy('order', 'asc'));
@@ -120,8 +138,10 @@ const Events = () => {
         .map((d) => ({ id: d.id, ...d.data() }))
         .filter((ev) => ev.isActive !== false);
       setEvents(all);
+      setLoadError(false);
     }, (error) => {
       console.error('Error fetching events:', error);
+      setLoadError(true);
     });
     return () => unsub();
   }, []);
@@ -131,6 +151,7 @@ const Events = () => {
 
   return (
     <div className="events-page">
+      <Seo title="Events" description="Upcoming and past events from Team RotorFPV — drone racing competitions, workshops, and showcases at VIT." />
       <div className="events-content">
         <h2 className="events-title">
           <ShinyText text="Events" speed={3} />
@@ -158,7 +179,10 @@ const Events = () => {
           </div>
         )}
 
-        {events.length === 0 && (
+        {loadError && events.length === 0 && (
+          <p className="events-empty">Couldn't load events right now. Please refresh to try again.</p>
+        )}
+        {!loadError && events.length === 0 && (
           <p className="events-empty">No events to show yet. Check back soon!</p>
         )}
       </div>

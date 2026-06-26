@@ -3,6 +3,8 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import VariableProximity from '../components/VariableProximity';
 import ShinyText from '../components/ShinyText';
+import { useIsMobile } from '../hooks/useIsMobile';
+import Seo from '../components/Seo';
 import './Home.css';
 
 const DEFAULT_ABOUT =
@@ -20,6 +22,7 @@ const EMPTY_CONTACT_FORM = {
 
 const Home = () => {
   const containerRef = useRef(null);
+  const isMobile = useIsMobile();
   const [videoSrc, setVideoSrc] = useState("/TRFPV_Assets/Teamvideo.mp4");
   const [aboutText, setAboutText] = useState(DEFAULT_ABOUT);
   const [formData, setFormData] = useState(EMPTY_CONTACT_FORM);
@@ -93,10 +96,22 @@ const Home = () => {
 
   return (
     <>
+      <Seo title="VIT FPV Drone Racing & Engineering Team" description="Team RotorFPV is VIT's premier FPV drone racing and engineering team — we design, build, and fly high-performance racing drones and compete nationally and internationally." />
       <div className="home-container" ref={containerRef}>
         <div className="video-background">
-          <video key={videoSrc} autoPlay loop muted playsInline>
-            <source src={videoSrc} type="video/mp4" />
+          <video
+            key={videoSrc}
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+            poster="/TRFPV_Assets/team_rotor_fpv_group_photo.png"
+          >
+            {/* The hero background video is large; on phones we skip it entirely
+                and let the poster image stand in (huge mobile-bandwidth win).
+                Desktop still streams the full background video. */}
+            {!isMobile && <source src={videoSrc} type="video/mp4" />}
             Your browser does not support the video tag.
           </video>
           <div className="video-overlay"></div>

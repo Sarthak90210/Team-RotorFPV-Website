@@ -5,6 +5,7 @@ import TiltedCard from '../components/TiltedCard';
 import { FaLinkedin, FaGithub } from 'react-icons/fa';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
+import Seo from '../components/Seo';
 import './Board.css';
 
 const MemberCard = ({ member }) => {
@@ -77,6 +78,16 @@ const Board = () => {
   const isWheelScrollingRef = useRef(false);
   const overscrollAmountRef = useRef(0);
 
+  // All transition timers are tracked here and cleared on unmount so a year
+  // change in flight can't fire setState on an unmounted component.
+  const timersRef = useRef([]);
+  const schedule = (fn, ms) => {
+    const id = setTimeout(fn, ms);
+    timersRef.current.push(id);
+    return id;
+  };
+  useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
+
   useEffect(() => {
     // We need to fetch team years and members
     const unsubs = [];
@@ -144,7 +155,7 @@ const Board = () => {
     if (newYear === activeYear) return;
     setIsAnimating(true);
     // Slight delay to allow fade out, then change data and fade in
-    setTimeout(() => {
+    schedule(() => {
       setActiveYear(newYear);
       setIsAnimating(false);
     }, 300); // 300ms transition time
@@ -172,11 +183,11 @@ const Board = () => {
         isWheelScrollingRef.current = true;
         const nextYear = years[nextIndex];
         changeYear(nextYear);
-        
+
         // Unlock wheel scrolling after animation
-        setTimeout(() => {
+        schedule(() => {
           isWheelScrollingRef.current = false;
-        }, 800); 
+        }, 800);
       }
     };
 
@@ -214,21 +225,21 @@ const Board = () => {
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                   
                   // Hide the overlay after 1 second
-                  setTimeout(() => {
+                  schedule(() => {
                     setShowExBoardOverlay(false);
                   }, 1000);
-                  
+
                   // Unlock scrolling
-                  setTimeout(() => {
+                  schedule(() => {
                     isWheelScrollingRef.current = false;
                   }, 1200);
                 } else {
                   // For older years, just change year without the overlay delay
                   changeYear(nextYear);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
-                  
+
                   // Unlock scrolling after regular animation
-                  setTimeout(() => {
+                  schedule(() => {
                     isWheelScrollingRef.current = false;
                   }, 800);
                 }
@@ -288,6 +299,7 @@ const Board = () => {
 
   return (
     <div className="team-page">
+      <Seo title="Board" description="Meet the team behind Team RotorFPV — the management, technical, and essential members driving VIT's FPV drone racing team." />
       <div className="team-content">
         <div className={`team-year-section active-section ${isAnimating ? 'fade-out' : 'fade-in'}`}>
           <h2 className="year-title">

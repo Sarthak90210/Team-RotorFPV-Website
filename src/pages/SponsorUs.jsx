@@ -6,6 +6,7 @@ import ShinyText from '../components/ShinyText';
 import SpotlightCard from '../components/SpotlightCard';
 import LogoLoop from '../components/LogoLoop';
 import { Cpu, Code, Factory } from 'lucide-react';
+import Seo from '../components/Seo';
 import './SponsorUs.css';
 
 const SponsorUs = () => {
@@ -107,6 +108,7 @@ const SponsorUs = () => {
 
   return (
     <div className="partners-page">
+      <Seo title="Sponsor Us" description="Partner with Team RotorFPV. Support VIT's FPV drone racing and engineering team and help us compete on the national and international stage." />
       <div className="partners-content fade-in">
 
         {/* Sponsor Us Hero */}

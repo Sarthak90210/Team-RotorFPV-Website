@@ -159,29 +159,36 @@ export const generateContinuousTrack = (yearCircuits) => {
   const lengths = masterSpline.getLengths();
   const totalLength = lengths[lengths.length - 1];
 
-  // Helper to accurately find the spline progress 'p' for a given world position
+  // Sample the whole spline ONCE into an evenly-spaced (by arc length) point
+  // table. Previously every checkpoint lookup re-sampled the spline 2000+ times
+  // via getPointAt(); now each lookup just scans this cached array.
+  const SAMPLES = 2000;
+  const samplePoints = masterSpline.getSpacedPoints(SAMPLES); // length SAMPLES + 1
+
+  // Find the spline progress 'p' nearest a given world position by scanning the
+  // cached samples within [searchStartP, searchEndP], then refining locally
+  // between the two neighbouring samples for sub-sample accuracy.
   const getProgressForTarget = (targetPos, searchStartP = 0, searchEndP = 1) => {
-    let bestP = searchStartP;
+    const startIdx = Math.max(0, Math.ceil(searchStartP * SAMPLES));
+    const endIdx = Math.min(SAMPLES, Math.floor(searchEndP * SAMPLES));
+
+    let bestIdx = startIdx;
     let minDist = Infinity;
-    const steps = 2000;
-    for (let i = 0; i <= steps; i++) {
-      const p = searchStartP + (i / steps) * (searchEndP - searchStartP);
-      const pt = masterSpline.getPointAt(p);
-      const d = pt.distanceToSquared(targetPos);
+    for (let i = startIdx; i <= endIdx; i++) {
+      const d = samplePoints[i].distanceToSquared(targetPos);
       if (d < minDist) {
         minDist = d;
-        bestP = p;
+        bestIdx = i;
       }
     }
-    // Refine search around bestP
+
+    let bestP = bestIdx / SAMPLES;
     const refineSteps = 50;
-    const stepSize = (searchEndP - searchStartP) / steps;
-    const refineStart = Math.max(searchStartP, bestP - stepSize);
-    const refineEnd = Math.min(searchEndP, bestP + stepSize);
+    const refineStart = Math.max(searchStartP, (bestIdx - 1) / SAMPLES);
+    const refineEnd = Math.min(searchEndP, (bestIdx + 1) / SAMPLES);
     for (let i = 0; i <= refineSteps; i++) {
       const p = refineStart + (i / refineSteps) * (refineEnd - refineStart);
-      const pt = masterSpline.getPointAt(p);
-      const d = pt.distanceToSquared(targetPos);
+      const d = masterSpline.getPointAt(p).distanceToSquared(targetPos);
       if (d < minDist) {
         minDist = d;
         bestP = p;

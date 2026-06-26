@@ -1,20 +1,28 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useIsMobile } from './hooks/useIsMobile';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import Home from './pages/Home';
-import Achievements from './pages/Achievements';
-import Events from './pages/Events';
-import Drones from './pages/Drones';
-import Admin from './pages/Admin';
-import Gallery from './pages/Gallery';
-import Board from './pages/Board';
-import SponsorUs from './pages/SponsorUs';
-import FormalAchievements from './pages/FormalAchievements';
 import ViewDropdown from './components/ViewDropdown';
-import Silk from './components/Silk';
-import MobileOverlay from './components/MobileOverlay';
+import ErrorBoundary from './components/ErrorBoundary';
+
+// The Silk background is a decorative full-screen WebGL shader that pulls in
+// three.js. Lazy-load it so the 1.4 MB three chunk streams in AFTER first paint
+// instead of blocking the initial render of every page.
+const Silk = lazy(() => import('./components/Silk'));
+
+// Pages are route-split so heavy dependencies (three.js, the FPV circuit) only
+// download when their page is actually visited — the Home/Events/Board pages no
+// longer pay for the 3D bundle on first load.
+const Home = lazy(() => import('./pages/Home'));
+const Achievements = lazy(() => import('./pages/Achievements'));
+const Events = lazy(() => import('./pages/Events'));
+const Drones = lazy(() => import('./pages/Drones'));
+const Admin = lazy(() => import('./pages/Admin'));
+const Gallery = lazy(() => import('./pages/Gallery'));
+const Board = lazy(() => import('./pages/Board'));
+const SponsorUs = lazy(() => import('./pages/SponsorUs'));
+const FormalAchievements = lazy(() => import('./pages/FormalAchievements'));
 
 // The contact form moved to the home page. Keep old /contact links working by
 // redirecting to home and scrolling to the contact section.
@@ -59,31 +67,36 @@ function AppContent() {
 
   return (
     <>
-      {false && <MobileOverlay />}
       <div className="app-background">
-        <Silk
-          speed={3.7}
-          scale={1}
-          color="#022e5223"
-          noiseIntensity={1.3}
-          rotation={0}
-        />
+        <Suspense fallback={null}>
+          <Silk
+            speed={3.7}
+            scale={1}
+            color="#022e5223"
+            noiseIntensity={1.3}
+            rotation={0}
+          />
+        </Suspense>
       </div>
       <Navbar />
       <ViewDropdown />
       <main>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/gallery" element={<Gallery />} />
-          <Route path="/achievements" element={<FormalAchievements />} />
-          <Route path="/interactive-achievements" element={<InteractiveAchievementsRoute />} />
-          <Route path="/board" element={<Board />} />
-          <Route path="/sponsor-us" element={<SponsorUs />} />
-          <Route path="/events" element={<Events />} />
-          <Route path="/drones" element={<Drones />} />
-          <Route path="/contact" element={<ContactRedirect />} />
-          <Route path="/admin" element={<Admin />} />
-        </Routes>
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+            <Route path="/gallery" element={<Gallery />} />
+            <Route path="/achievements" element={<FormalAchievements />} />
+            <Route path="/interactive-achievements" element={<InteractiveAchievementsRoute />} />
+            <Route path="/board" element={<Board />} />
+            <Route path="/sponsor-us" element={<SponsorUs />} />
+            <Route path="/events" element={<Events />} />
+            <Route path="/drones" element={<Drones />} />
+            <Route path="/contact" element={<ContactRedirect />} />
+            <Route path="/admin" element={<Admin />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </main>
       {!isInteractiveAchievementsPage && <Footer />}
     </>

@@ -1,5 +1,5 @@
 {
-  "name": "temp_app",
+  "name": "team-rotorfpv-website",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -14,10 +14,8 @@
     "@react-three/fiber": "^9.6.1",
     "@react-three/postprocessing": "^3.0.4",
     "firebase": "^12.15.0",
-    "gl-matrix": "^3.4.4",
     "gsap": "^3.15.0",
     "lucide-react": "^1.17.0",
-    "maath": "^0.10.8",
     "motion": "^12.40.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

@@ -52,7 +52,8 @@ const DronesTab = ({ user }) => {
     setLoadingNodes(true);
     const loader = new GLTFLoader();
     const draco = new DRACOLoader();
-    draco.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+    // Self-hosted Draco decoder (public/draco/) — no third-party CDN at runtime.
+    draco.setDecoderPath('/draco/');
     loader.setDRACOLoader(draco);
     loader.load(
       formData.modelUrl,
@@ -424,18 +425,24 @@ const DronesTab = ({ user }) => {
                           <span style={{ fontSize: '0.9rem' }}>{nodeName}</span>
                         </label>
                         {sel && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+                            <label style={{ fontSize: '0.78rem', opacity: 0.8 }}>
+                              Display name (shown in the viewer — edit to fix typos)
+                            </label>
                             <input
                               type="text"
                               value={sel.label}
                               onChange={(e) => updateComponent(nodeName, 'label', e.target.value)}
-                              placeholder="Display label (e.g. Flight Controller)"
+                              placeholder="e.g. Flight Controller"
                             />
+                            <label style={{ fontSize: '0.78rem', opacity: 0.8, marginTop: 6 }}>
+                              Description
+                            </label>
                             <textarea
                               rows="2"
                               value={sel.description}
                               onChange={(e) => updateComponent(nodeName, 'description', e.target.value)}
-                              placeholder="Description shown when this part is selected"
+                              placeholder="Shown when this part is selected"
                             ></textarea>
                           </div>
                         )}

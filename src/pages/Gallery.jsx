@@ -7,6 +7,7 @@ import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore'
 import { db } from '../firebase';
 import Masonry from '../components/Masonry';
 import ScrollFloat from '../components/ScrollFloat';
+import Seo from '../components/Seo';
 import './Gallery.css';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -14,6 +15,7 @@ gsap.registerPlugin(ScrollTrigger);
 const Gallery = () => {
   const [galleryItems, setGalleryItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [heroImgUrl, setHeroImgUrl] = useState(null);
   const [loadingHero, setLoadingHero] = useState(true);
@@ -83,9 +85,11 @@ const Gallery = () => {
         ...doc.data()
       }));
       setGalleryItems(data);
+      setLoadError(false);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching gallery:", error);
+      setLoadError(true);
       setLoading(false);
     });
 
@@ -113,6 +117,7 @@ const Gallery = () => {
 
   return (
     <div className="gallery-page">
+      <Seo title="Gallery" description="Photos from Team RotorFPV — our drones, builds, competitions, and team moments at VIT." />
       <div className="gallery-transition-wrapper" ref={wrapperRef}>
         
         {/* Hero Section */}
@@ -151,6 +156,8 @@ const Gallery = () => {
               onImageClick={setSelectedImage}
               onLayoutComplete={handleMasonryLayoutComplete}
             />
+          ) : loadError ? (
+            <div style={{ color: 'white', textAlign: 'center', marginTop: '50px' }}>Couldn't load the gallery. Please refresh to try again.</div>
           ) : (
             <div style={{ color: 'white', textAlign: 'center', marginTop: '50px' }}>No gallery images available yet.</div>
           )}

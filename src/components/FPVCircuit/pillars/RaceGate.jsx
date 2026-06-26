@@ -8,6 +8,12 @@ export const RaceGate = ({ position }) => {
   const outerGeo = React.useMemo(() => new THREE.TorusGeometry(23.6, 0.15, 16, 64), []);
   const innerGeo = React.useMemo(() => new THREE.TorusGeometry(16.4, 0.15, 16, 64), []);
 
+  // Imperatively-created geometries aren't auto-disposed by R3F; free them on unmount.
+  React.useEffect(() => () => {
+    outerGeo.dispose();
+    innerGeo.dispose();
+  }, [outerGeo, innerGeo]);
+
   return (
     <group position={[position.x, position.y, position.z]}>
       {/* Clean Glass Filler Loop */}

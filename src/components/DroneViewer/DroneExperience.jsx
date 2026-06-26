@@ -176,8 +176,9 @@ function fitAndReplace(node, sourceScene, rotation, scaleMul) {
  * finishing the turn, landing back where it started, fully assembled.
  */
 function DroneModel({ progressRef, modelUrl, onComplete, selected }) {
-  const { scene } = useGLTF(modelUrl, true);
-  const piGltf = useGLTF('/RaspberryPi5_4GB.glb');
+  // Second arg = Draco decoder path; self-hosted in public/draco/ (no CDN).
+  const { scene } = useGLTF(modelUrl, '/draco/');
+  const piGltf = useGLTF('/RaspberryPi5_4GB.glb', '/draco/');
   const pivotRef = useRef();
   const trackerRef = useRef(); // follows the selected part for the callout anchor
   const interactiveRef = useRef(false);
@@ -372,7 +373,7 @@ function DroneModel({ progressRef, modelUrl, onComplete, selected }) {
 
 // Drone models load on demand (dynamic Cloudinary URLs); only the local Pi
 // detail model is preloaded since it's reused across the Swaayatt drone.
-useGLTF.preload('/RaspberryPi5_4GB.glb');
+useGLTF.preload('/RaspberryPi5_4GB.glb', '/draco/');
 
 function Loader() {
   const { progress } = useProgress();

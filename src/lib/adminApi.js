@@ -4,7 +4,12 @@ import { auth } from '../firebase';
 // Previously this line was copy-pasted ~13 times across the admin UI.
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-const getIdToken = () => auth.currentUser.getIdToken();
+const getIdToken = () => {
+  if (!auth.currentUser) {
+    throw new Error('Not authenticated. Please sign in again.');
+  }
+  return auth.currentUser.getIdToken();
+};
 
 // POST JSON to the admin backend with the caller's Firebase ID token.
 // Returns { ok, data }. Never throws on HTTP status — only on network failure.

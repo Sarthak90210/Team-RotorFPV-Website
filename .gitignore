@@ -36,3 +36,7 @@ server/node_modules
 .firebase/
 
 .claude
+
+# Raw 3D model source files (~83 MB) — kept locally, not tracked in git.
+# Optimized models are served from public/ and Supabase Storage instead.
+model-source/

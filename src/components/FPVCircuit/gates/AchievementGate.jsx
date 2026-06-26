@@ -1,8 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { useFPVCircuit } from '../FPVCircuitProvider';
 import { AchievementHologram } from '../holograms/AchievementHologram';
-import { PCBIsland } from '../track/PCBIsland';
 import { Cone } from '@react-three/drei';
 
 import { NeonRing } from '../effects/NeonRing';
@@ -36,6 +35,13 @@ export const AchievementGate = ({ gateData, index }) => {
       innerGeo: new THREE.TorusGeometry(baseRadius - tubeRadius - 0.1, 0.15, 16, 64)
     };
   }, [placement]);
+
+  // These geometries are created imperatively (not via JSX), so R3F won't
+  // auto-dispose them. Free the GPU buffers when they change or on unmount.
+  useEffect(() => () => {
+    outerGeo.dispose();
+    innerGeo.dispose();
+  }, [outerGeo, innerGeo]);
 
   const hasImage = (gateData.images && gateData.images.length > 0) || gateData.imageUrl;
 

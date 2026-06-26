@@ -10,6 +10,12 @@ import { getGlobalProgress } from '../utils/progress';
 // makes the camera yaw/bank toward the next loop like a real drone chasing gates.
 export const LOOK_AHEAD_DISTANCE = 250;
 
+// Module-level constants/scratch reused across frames to avoid per-frame
+// allocations (and the resulting GC churn) inside useFrame. Safe because there
+// is only ever one FPVCamera and useFrame runs synchronously on one thread.
+const UP = new THREE.Vector3(0, 1, 0);
+const ROLL_CENTERS = [0.35];
+
 export const FPVCamera = ({ spline }) => {
   const targetLookAt = useRef(new THREE.Vector3());
   const currentPos = useRef(new THREE.Vector3());
@@ -24,6 +30,14 @@ export const FPVCamera = ({ spline }) => {
   // so anticipation stays consistent regardless of total track length.
   const totalLength = useMemo(() => (spline ? spline.getLength() : 1), [spline]);
 
+  // Per-instance scratch vectors, allocated once, mutated each frame.
+  const scratch = useMemo(() => ({
+    splinePos: new THREE.Vector3(),
+    tangent: new THREE.Vector3(),
+    lookAheadPos: new THREE.Vector3(),
+    axis: new THREE.Vector3(),
+  }), []);
+
   useFrame((state, delta) => {
     if (!spline) return;
 
@@ -31,26 +45,24 @@ export const FPVCamera = ({ spline }) => {
     // We just read the current damped value directly.
     const p = Math.max(0, Math.min(getGlobalProgress(), 1));
 
-    const splinePos = spline.getPointAt(p);
-    const tangent = spline.getTangentAt(p);
-    
+    const splinePos = spline.getPointAt(p, scratch.splinePos);
+    const tangent = spline.getTangentAt(p, scratch.tangent);
+
     // Look-ahead calculation: aim a fixed world-distance ahead along the track,
     // so the camera turns to face the next loop in its direction of travel.
     const lookAheadU = Math.min(p + LOOK_AHEAD_DISTANCE / totalLength, 1);
-    const lookAheadPos = spline.getPointAt(lookAheadU);
-    
+    const lookAheadPos = spline.getPointAt(lookAheadU, scratch.lookAheadPos);
+
     // Add banking (roll) based on how sharp the curve is turning
-    const up = new THREE.Vector3(0, 1, 0);
-    const axis = new THREE.Vector3().crossVectors(up, tangent).normalize();
-    const baseBankAngle = axis.x * 0.15; 
+    const axis = scratch.axis.crossVectors(UP, tangent).normalize();
+    const baseBankAngle = axis.x * 0.15;
 
     // Calculate FPV Tricks!
     let trickRoll = 0;
     let trickPitch = 0;
-    
+
     // Barrel rolls at various track percentages
-    const rollCenters = [0.35];
-    rollCenters.forEach((center, idx) => {
+    ROLL_CENTERS.forEach((center, idx) => {
       // Extended trick duration (16% of track) so it slowly rolls through gates
       const t = (p - center) / 0.08; 
       if (t > -1 && t < 1) {

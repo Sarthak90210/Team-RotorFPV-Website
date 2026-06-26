@@ -68,14 +68,21 @@ const TeamTab = () => {
 
   const handleAddYear = async (e) => {
     e.preventDefault();
-    if (!newTeamYear.trim()) return;
+    const year = newTeamYear.trim();
+    if (!year) return;
+    // Year becomes the Firestore document ID, so enforce a strict 4-digit
+    // format (e.g. "2025") — rejects free-text that would create junk doc IDs.
+    if (!/^\d{4}$/.test(year)) {
+      alert('Enter a valid 4-digit year, e.g. 2025.');
+      return;
+    }
     try {
-      await setDoc(doc(db, 'team_years', newTeamYear.trim()), {
-        year: newTeamYear.trim(),
+      await setDoc(doc(db, 'team_years', year), {
+        year,
         createdAt: serverTimestamp()
       });
       setNewTeamYear('');
-      setSelectedTeamYear(newTeamYear.trim());
+      setSelectedTeamYear(year);
     } catch (error) {
       console.error("Add Year Error:", error);
       alert("Failed to add year. " + error.message);
