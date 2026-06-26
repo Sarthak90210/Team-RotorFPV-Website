@@ -299,7 +299,7 @@ const Board = () => {
 
   return (
     <div className="team-page">
-      <Seo title="Board" description="Meet the team behind Team RotorFPV — the management, technical, and essential members driving VIT's FPV drone racing team." />
+      <Seo description="Meet the team behind Team RotorFPV — the management, technical, and essential members driving VIT's FPV drone racing team." />
       <div className="team-content">
         <div className={`team-year-section active-section ${isAnimating ? 'fade-out' : 'fade-in'}`}>
           <h2 className="year-title">

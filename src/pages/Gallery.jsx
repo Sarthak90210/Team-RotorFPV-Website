@@ -117,7 +117,7 @@ const Gallery = () => {
 
   return (
     <div className="gallery-page">
-      <Seo title="Gallery" description="Photos from Team RotorFPV — our drones, builds, competitions, and team moments at VIT." />
+      <Seo description="Photos from Team RotorFPV — our drones, builds, competitions, and team moments at VIT." />
       <div className="gallery-transition-wrapper" ref={wrapperRef}>
         
         {/* Hero Section */}

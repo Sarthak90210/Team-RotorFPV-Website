@@ -151,7 +151,7 @@ const Events = () => {
 
   return (
     <div className="events-page">
-      <Seo title="Events" description="Upcoming and past events from Team RotorFPV — drone racing competitions, workshops, and showcases at VIT." />
+      <Seo description="Upcoming and past events from Team RotorFPV — drone racing competitions, workshops, and showcases at VIT." />
       <div className="events-content">
         <h2 className="events-title">
           <ShinyText text="Events" speed={3} />

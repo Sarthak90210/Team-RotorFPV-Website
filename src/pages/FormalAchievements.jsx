@@ -121,7 +121,7 @@ const FormalAchievements = () => {
 
   return (
     <div className="formal-achievements-page">
-      <Seo title="Achievements" description="Team RotorFPV's competition results and milestones — championships, records, and awards across years of FPV drone racing at VIT." />
+      <Seo description="Team RotorFPV's competition results and milestones — championships, records, and awards across years of FPV drone racing at VIT." />
       {/* The 3D Rotating Year Dropdown Pill */}
       {availableYears.length > 0 && (
         <div className="fa-pill-container" ref={pillRef}>

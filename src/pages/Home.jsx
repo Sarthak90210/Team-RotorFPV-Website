@@ -94,7 +94,7 @@ const Home = () => {
 
   return (
     <>
-      <Seo title="VIT FPV Drone Racing & Engineering Team" description="Team RotorFPV is VIT's premier FPV drone racing and engineering team — we design, build, and fly high-performance racing drones and compete nationally and internationally." />
+      <Seo description="Team RotorFPV is VIT's premier FPV drone racing and engineering team — we design, build, and fly high-performance racing drones and compete nationally and internationally." />
       <div className="home-container" ref={containerRef}>
         <div className="video-background">
           <video key={videoSrc} autoPlay loop muted playsInline>

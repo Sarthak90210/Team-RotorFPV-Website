@@ -55,7 +55,7 @@ const Achievements = () => {
 
   return (
     <div className="achievements-page-fpv">
-      <Seo title="Interactive Achievements" description="Fly through Team RotorFPV's achievements in an interactive 3D FPV circuit." />
+      <Seo description="Fly through Team RotorFPV's achievements in an interactive 3D FPV circuit." />
       <FPVCircuitProvider rawAchievements={achievements}>
         {/* The canvas container is fixed, but the page itself is scrollable to drive progress */}
         <div className="fpv-canvas-container">

@@ -71,7 +71,7 @@ const Drones = () => {
 
   return (
     <div className="drones-page">
-      <Seo title="Drones" description="Explore Team RotorFPV's custom-built racing drones in interactive 3D — frames, motors, and electronics designed and assembled by the team." />
+      <Seo description="Explore Team RotorFPV's custom-built racing drones in interactive 3D — frames, motors, and electronics designed and assembled by the team." />
       <div className="drones-content">
         <h2 className="drones-title">
           <ShinyText text="Drones" speed={3} />
