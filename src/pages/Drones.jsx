@@ -105,16 +105,7 @@ const Drones = () => {
             </div>
           }
         >
-          <Suspense
-            fallback={
-              <div className="drone-mobile-notice" role="status" aria-live="polite">
-                <div className="drone-mobile-notice-box">
-                  <div className="drone-mobile-notice-icon">🛠️</div>
-                  <h3>Loading 3D viewer…</h3>
-                </div>
-              </div>
-            }
-          >
+          <Suspense fallback={null}>
             <DroneExperience
               modelUrl={selected.modelUrl}
               name={selected.name}
