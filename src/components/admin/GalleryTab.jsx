@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { uploadFile, deleteCloudinaryImage } from '../../lib/adminApi';
+import { uploadFile, deleteCloudinaryImage, logAdminAction } from '../../lib/adminApi';
 
 const EMPTY_FORM = { imgUrl: '', order: 0, originalWidth: null, originalHeight: null };
 
@@ -58,6 +58,7 @@ const GalleryTab = () => {
           await deleteCloudinaryImage(galleryHeroUrl);
         }
         await setDoc(doc(db, 'settings', 'gallery'), { heroImageUrl: uploadedImage.secure_url }, { merge: true });
+        await logAdminAction('UPDATE', 'Gallery', 'Updated Gallery Hero Image');
         alert("Gallery Hero Image updated successfully!");
       } else {
         alert(uploadedImage.error || "Upload failed. Please try again.");
@@ -96,6 +97,7 @@ const GalleryTab = () => {
               originalHeight: uploadedImage.height || 400,
               url: ""
             });
+            await logAdminAction('CREATE', 'Gallery', 'Added new gallery image (bulk upload)');
           } else {
             // For a single file, just populate the form so the user can submit manually
             setGalleryFormData(prev => ({
@@ -145,6 +147,7 @@ const GalleryTab = () => {
       try {
         await deleteDoc(doc(db, 'gallery', item.id));
         await deleteCloudinaryImage(item.img);
+        await logAdminAction('DELETE', 'Gallery', 'Deleted a gallery image');
       } catch (error) {
         console.error("Delete Error:", error);
         alert("Failed to delete. You might not have permission.");
@@ -186,8 +189,10 @@ const GalleryTab = () => {
           await deleteCloudinaryImage(oldItem.img);
         }
         await updateDoc(doc(db, 'gallery', editingGalleryId), dataToSave);
+        await logAdminAction('UPDATE', 'Gallery', 'Updated a gallery image');
       } else {
         await addDoc(collection(db, 'gallery'), dataToSave);
+        await logAdminAction('CREATE', 'Gallery', 'Added new gallery image');
       }
       resetGalleryForm();
     } catch (error) {

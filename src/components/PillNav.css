@@ -23,6 +23,7 @@
   display: flex;
   align-items: center;
   height: var(--nav-h);
+  width: 100%;
   background: var(--glass-bg, rgba(10, 25, 47, 0.6));
   border: 1px solid var(--glass-border, rgba(100, 255, 218, 0.15));
   border-radius: 9999px;
@@ -40,6 +41,8 @@
   list-style: none;
   display: flex;
   align-items: stretch;
+  justify-content: flex-start;
+  width: 100%;
   gap: var(--pill-gap);
   margin: 0;
   padding: 4px;
@@ -63,7 +66,7 @@
   appearance: none;
   font-family: inherit;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 0;
   letter-spacing: 0.3px;
   text-transform: uppercase;

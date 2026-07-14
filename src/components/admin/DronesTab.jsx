@@ -3,7 +3,7 @@ import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, d
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { db } from '../../firebase';
-import { uploadFile, deleteCloudinaryImage, uploadModel, deleteModel } from '../../lib/adminApi';
+import { uploadFile, deleteCloudinaryImage, uploadModel, deleteModel, logAdminAction } from '../../lib/adminApi';
 
 const EMPTY_DRONE_FORM = {
   name: '',
@@ -189,6 +189,7 @@ const DronesTab = ({ user }) => {
       await deleteDoc(doc(db, 'drones', item.id));
       await deleteCloudinaryImage(item.image);
       await deleteModel(item.modelPath);
+      await logAdminAction('DELETE', 'Drone', `Deleted drone: ${item.name}`);
     } catch (error) {
       console.error('Delete error:', error);
       alert('Failed to delete drone.');
@@ -223,10 +224,12 @@ const DronesTab = ({ user }) => {
         if (old?.image && old.image !== formData.image) await deleteCloudinaryImage(old.image);
         if (old?.modelPath && old.modelPath !== formData.modelPath) await deleteModel(old.modelPath);
         await updateDoc(doc(db, 'drones', editingId), dataToSave);
+        await logAdminAction('UPDATE', 'Drone', `Updated drone: ${dataToSave.name}`);
       } else {
         dataToSave.createdAt = serverTimestamp();
         dataToSave.createdBy = user.email;
         await addDoc(collection(db, 'drones'), dataToSave);
+        await logAdminAction('CREATE', 'Drone', `Created drone: ${dataToSave.name}`);
       }
       resetForm();
     } catch (error) {

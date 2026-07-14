@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchAnalytics } from '../../lib/adminApi';
 
-// ISO-2 country code -> flag emoji (regional indicator symbols). No dependency.
-const flagEmoji = (cc) => {
+// ISO-2 country code -> string. (Emojis removed per request)
+const formatCountryCode = (cc) => {
   if (!cc || cc.length !== 2) return '🌐';
-  return cc
-    .toUpperCase()
-    .replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)));
+  return cc.toUpperCase();
 };
 
 // ISO-2 country code -> full English name, via the browser's Intl API.
@@ -112,7 +110,7 @@ const TrafficTab = () => {
                 <div className="country-list">
                   {data.byCountry.map((c) => (
                     <div key={c.country} className="country-row">
-                      <span className="country-flag">{flagEmoji(c.country)}</span>
+                      <span className="country-flag">{formatCountryCode(c.country)}</span>
                       <span className="country-name">{countryName(c.country)}</span>
                       <div className="country-bar-track">
                         <div
@@ -146,7 +144,7 @@ const TrafficTab = () => {
                           <tr key={`${v.ip}-${v.timestamp}-${i}`}>
                             <td>{formatTime(v.timestamp)}</td>
                             <td>
-                              <span className="visit-flag">{flagEmoji(v.country)}</span>
+                              <span className="visit-flag">{formatCountryCode(v.country)}</span>
                               {[v.region, countryName(v.country)]
                                 .filter(Boolean)
                                 .filter((x) => x !== 'Unknown')

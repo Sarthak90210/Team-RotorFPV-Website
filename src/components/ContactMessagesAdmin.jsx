@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { logAdminAction } from '../lib/adminApi';
 import './ContactMessagesAdmin.css';
 
 const ContactMessagesAdmin = () => {
@@ -24,22 +25,32 @@ const ContactMessagesAdmin = () => {
     return () => unsubscribe();
   }, []);
 
-  const handleMarkAsRead = async (id, currentStatus) => {
+  const handleMarkAsRead = async (msg) => {
     try {
-      const newStatus = currentStatus === 'unread' ? 'read' : 'unread';
-      await updateDoc(doc(db, 'contact_messages', id), {
+      const newStatus = msg.status === 'unread' ? 'read' : 'unread';
+      await updateDoc(doc(db, 'contact_messages', msg.id), {
         status: newStatus
       });
+      await logAdminAction(
+        newStatus === 'read' ? 'Marked as Read' : 'Marked as Unread',
+        'Contact Message',
+        `Message from ${msg.name} (${msg.email}) was marked as ${newStatus}`
+      );
     } catch (error) {
       console.error('Error updating status:', error);
       alert('Failed to update status');
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (msg) => {
     if (window.confirm('Are you sure you want to delete this message?')) {
       try {
-        await deleteDoc(doc(db, 'contact_messages', id));
+        await deleteDoc(doc(db, 'contact_messages', msg.id));
+        await logAdminAction(
+          'Deleted',
+          'Contact Message',
+          `Deleted message from ${msg.name} (${msg.email})`
+        );
       } catch (error) {
         console.error('Error deleting message:', error);
         alert('Failed to delete message');
@@ -116,14 +127,14 @@ const ContactMessagesAdmin = () => {
               <div className="message-actions">
                 <button 
                   className={`btn-action ${msg.status === 'unread' ? 'btn-read' : 'btn-unread'}`}
-                  onClick={() => handleMarkAsRead(msg.id, msg.status)}
+                  onClick={() => handleMarkAsRead(msg)}
                 >
                   {msg.status === 'unread' ? 'Mark as Read' : 'Mark as Unread'}
                 </button>
                 <a href={`mailto:${msg.email}?subject=Re: [Team RotorFPV] ${msg.queryType}`} className="btn-action btn-reply">
                   Reply via Email
                 </a>
-                <button className="btn-action btn-delete" onClick={() => handleDelete(msg.id)}>
+                <button className="btn-action btn-delete" onClick={() => handleDelete(msg)}>
                   Delete
                 </button>
               </div>

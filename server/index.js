@@ -787,6 +787,67 @@ app.get('/api/analytics', verifyAdmin, async (req, res) => {
   }
 });
 
+// Endpoint to fetch unified logs for Super Admins
+app.get('/api/logs', verifySuperAdmin, async (req, res) => {
+  try {
+    const limitNum = 200; // Fetch top 200 from each to ensure good overlap
+    const [activitySnap, auditSnap, contactSnap] = await Promise.all([
+      db.collection('activity_logs').orderBy('timestamp', 'desc').limit(limitNum).get(),
+      db.collection('audit_logs').orderBy('timestamp', 'desc').limit(limitNum).get(),
+      db.collection('contact_messages').orderBy('createdAt', 'desc').limit(limitNum).get()
+    ]);
+
+    const logs = [];
+
+    activitySnap.forEach(doc => {
+      const data = doc.data();
+      logs.push({
+        id: doc.id,
+        type: 'activity',
+        user: data.userEmail,
+        action: data.actionType,
+        target: data.targetType,
+        details: data.details,
+        timestamp: data.timestamp // ISO string from client
+      });
+    });
+
+    auditSnap.forEach(doc => {
+      const data = doc.data();
+      logs.push({
+        id: doc.id,
+        type: 'audit',
+        user: data.userEmail,
+        action: 'ROLE_CHANGE',
+        target: data.targetEmail,
+        details: `${data.action} ${data.targetEmail}`,
+        timestamp: data.timestamp?.toDate ? data.timestamp.toDate().toISOString() : new Date(data.timestamp).toISOString()
+      });
+    });
+
+    contactSnap.forEach(doc => {
+      const data = doc.data();
+      logs.push({
+        id: doc.id,
+        type: 'contact',
+        user: data.email,
+        action: 'CONTACT_SUBMISSION',
+        target: 'Contact Form',
+        details: `Message from ${data.name}: ${data.queryType}`,
+        timestamp: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString()
+      });
+    });
+
+    // Sort combined logs by timestamp descending
+    logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    res.json({ logs: logs.slice(0, 500) }); // Return top 500 overall
+  } catch (error) {
+    console.error('Logs fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch logs' });
+  }
+});
+
 // Handle multer errors (file too large, wrong type)
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {

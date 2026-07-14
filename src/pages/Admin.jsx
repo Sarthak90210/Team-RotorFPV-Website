@@ -11,20 +11,22 @@ import SponsorsTab from '../components/admin/SponsorsTab';
 import AdminsTab from '../components/admin/AdminsTab';
 import TrafficTab from '../components/admin/TrafficTab';
 import ContactMessagesAdmin from '../components/ContactMessagesAdmin';
+import LogsTab from '../components/admin/LogsTab';
 import PillNav from '../components/PillNav';
 import './Admin.css';
 
 const TABS = [
-  { key: 'home', label: 'Home Page Settings' },
+  { key: 'home', label: 'Home Page' },
   { key: 'achievements', label: 'Achievements' },
   { key: 'gallery', label: 'Gallery' },
   { key: 'team', label: 'Board' },
   { key: 'events', label: 'Events' },
   { key: 'drones', label: 'Drones' },
   { key: 'sponsors', label: 'Sponsors' },
-  { key: 'contact_messages', label: 'Contact Messages' },
+  { key: 'contact_messages', label: 'Messages' },
   { key: 'traffic', label: 'Traffic' },
-  { key: 'admins', label: 'Manage Admins', superAdminOnly: true },
+  { key: 'admins', label: 'Admins', superAdminOnly: true },
+  { key: 'logs', label: 'Logs', superAdminOnly: true },
 ];
 
 const Admin = () => {
@@ -126,6 +128,7 @@ const Admin = () => {
       case 'contact_messages': return <ContactMessagesAdmin />;
       case 'traffic': return <TrafficTab />;
       case 'admins': return user.isSuperAdmin ? <AdminsTab user={user} /> : null;
+      case 'logs': return user.isSuperAdmin ? <LogsTab /> : null;
       default: return null;
     }
   };

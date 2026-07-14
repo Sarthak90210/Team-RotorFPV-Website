@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { uploadFile, deleteCloudinaryImage } from '../../lib/adminApi';
+import { uploadFile, deleteCloudinaryImage, logAdminAction } from '../../lib/adminApi';
 
 const EMPTY_SPONSOR_FORM = { name: '', website: '', logo: '', order: 0, isActive: true };
 
@@ -112,6 +112,7 @@ const SponsorsTab = ({ user }) => {
       try {
         await deleteDoc(doc(db, 'sponsors', item.id));
         await deleteCloudinaryImage(item.logo);
+        await logAdminAction('DELETE', 'Sponsor', `Deleted sponsor: ${item.name}`);
       } catch (error) {
         console.error("Delete Error:", error);
         alert("Failed to delete sponsor.");
@@ -142,10 +143,12 @@ const SponsorsTab = ({ user }) => {
           await deleteCloudinaryImage(oldItem.logo);
         }
         await updateDoc(doc(db, 'sponsors', editingSponsorId), dataToSave);
+        await logAdminAction('UPDATE', 'Sponsor', `Updated sponsor: ${dataToSave.name}`);
       } else {
         dataToSave.createdAt = serverTimestamp();
         dataToSave.createdBy = user.email;
         await addDoc(collection(db, 'sponsors'), dataToSave);
+        await logAdminAction('CREATE', 'Sponsor', `Added sponsor: ${dataToSave.name}`);
       }
       resetSponsorForm();
     } catch (error) {
@@ -212,6 +215,7 @@ const SponsorsTab = ({ user }) => {
         updatedAt: serverTimestamp(),
         updatedBy: user.email
       }, { merge: true });
+      await logAdminAction('UPDATE', 'SponsorsSettings', 'Updated Sponsor Us Page Settings');
       alert("Sponsors Page Settings updated successfully!");
     } catch (error) {
       console.error("Save Error:", error);

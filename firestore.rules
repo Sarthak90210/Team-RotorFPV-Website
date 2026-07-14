@@ -50,6 +50,10 @@ service cloud.firestore {
     match /contact_messages/{docId} {
       allow read, write: if isAdmin();
     }
+
+    match /activity_logs/{docId} {
+      allow read, create: if isAdmin();
+    }
     // Deny everything else by default.
     // Any new collection must have explicit rules added above.
     match /{document=**} {

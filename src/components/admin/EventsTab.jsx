@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { uploadFile, deleteCloudinaryImage, moveCloudinaryImage } from '../../lib/adminApi';
+import { uploadFile, deleteCloudinaryImage, moveCloudinaryImage, logAdminAction } from '../../lib/adminApi';
 
 const EMPTY_EVENT_FORM = {
   name: '',
@@ -146,6 +146,7 @@ const EventsTab = ({ user }) => {
         for (const url of item.galleryImages || []) {
           await deleteCloudinaryImage(url);
         }
+        await logAdminAction('DELETE', 'Event', `Deleted event: ${item.name}`);
       } catch (error) {
         console.error("Delete Error:", error);
         alert("Failed to delete event.");
@@ -190,10 +191,12 @@ const EventsTab = ({ user }) => {
           );
         }
         await updateDoc(doc(db, 'events', editingEventId), dataToSave);
+        await logAdminAction('UPDATE', 'Event', `Updated event: ${dataToSave.name}`);
       } else {
         dataToSave.createdAt = serverTimestamp();
         dataToSave.createdBy = user.email;
         await addDoc(collection(db, 'events'), dataToSave);
+        await logAdminAction('CREATE', 'Event', `Created event: ${dataToSave.name}`);
       }
       resetEventForm();
     } catch (error) {

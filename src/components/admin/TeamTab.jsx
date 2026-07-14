@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { uploadFile, deleteCloudinaryImage } from '../../lib/adminApi';
+import { uploadFile, deleteCloudinaryImage, logAdminAction } from '../../lib/adminApi';
 
 const formatBoardYear = (year) => {
   if (typeof year === 'string' && year.length === 4 && !isNaN(parseInt(year))) {
@@ -81,6 +81,7 @@ const TeamTab = () => {
         year,
         createdAt: serverTimestamp()
       });
+      await logAdminAction('CREATE', 'TeamYear', `Added new team year: ${year}`);
       setNewTeamYear('');
       setSelectedTeamYear(year);
     } catch (error) {
@@ -93,6 +94,7 @@ const TeamTab = () => {
     if (window.confirm(`Are you sure you want to delete the year ${year}? This does NOT delete the members in this year automatically.`)) {
       try {
         await deleteDoc(doc(db, 'team_years', year));
+        await logAdminAction('DELETE', 'TeamYear', `Deleted team year: ${year}`);
         if (selectedTeamYear === year) {
           setSelectedTeamYear(teamYears.filter(y => y !== year)[0] || '');
         }
@@ -137,6 +139,7 @@ const TeamTab = () => {
       try {
         await deleteDoc(doc(db, 'team_members', member.id));
         await deleteCloudinaryImage(member.image);
+        await logAdminAction('DELETE', 'TeamMember', `Deleted team member: ${member.name}`);
       } catch (error) {
         console.error("Delete Error:", error);
         alert("Failed to delete team member.");
@@ -171,9 +174,11 @@ const TeamTab = () => {
           await deleteCloudinaryImage(oldItem.image);
         }
         await updateDoc(doc(db, 'team_members', editingTeamMemberId), dataToSave);
+        await logAdminAction('UPDATE', 'TeamMember', `Updated team member: ${dataToSave.name}`);
       } else {
         dataToSave.createdAt = serverTimestamp();
         await addDoc(collection(db, 'team_members'), dataToSave);
+        await logAdminAction('CREATE', 'TeamMember', `Added team member: ${dataToSave.name}`);
       }
       resetTeamMemberForm();
     } catch (error) {

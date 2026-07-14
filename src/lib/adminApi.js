@@ -1,5 +1,5 @@
-import { auth } from '../firebase';
-
+import { auth, db } from '../firebase';
+import { collection, addDoc } from 'firebase/firestore';
 // Single source of truth for the backend base URL.
 // Previously this line was copy-pasted ~13 times across the admin UI.
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -143,4 +143,28 @@ export async function fetchAdmins() {
   if (!res.ok) return [];
   const data = await res.json();
   return data.admins || [];
+}
+
+// Log an action to activity_logs collection for the LogsTab feed.
+// Details string is a brief summary of what happened.
+export async function logAdminAction(actionType, targetType, details) {
+  try {
+    if (!auth.currentUser) return;
+    await addDoc(collection(db, 'activity_logs'), {
+      userEmail: auth.currentUser.email,
+      actionType,
+      targetType,
+      details,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Failed to log admin action:', error);
+  }
+}
+
+// Fetch unified logs
+export async function fetchLogs() {
+  const { ok, data } = await apiGet('/api/logs');
+  if (!ok) throw new Error(data.error || 'Failed to fetch logs');
+  return data.logs || [];
 }

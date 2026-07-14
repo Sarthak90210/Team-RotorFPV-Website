@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { uploadFile, deleteCloudinaryImage } from '../../lib/adminApi';
+import { uploadFile, deleteCloudinaryImage, logAdminAction } from '../../lib/adminApi';
 
 const EMPTY_SETTINGS = {
   backgroundVideoUrl: '',
@@ -44,6 +44,7 @@ const HomeSettingsTab = ({ user }) => {
         updatedAt: serverTimestamp(),
         updatedBy: user.email
       }, { merge: true });
+      await logAdminAction('UPDATE', 'HomeSettings', 'Updated About Us text');
       alert("About Us section updated successfully!");
     } catch (error) {
       console.error("Error updating About Us:", error);
@@ -95,6 +96,7 @@ const HomeSettingsTab = ({ user }) => {
         updatedAt: serverTimestamp(),
         updatedBy: user.email
       }, { merge: true });
+      await logAdminAction('UPDATE', 'HomeSettings', 'Updated Home background video');
       alert("Home background video updated successfully!");
     } catch (error) {
       console.error("Error updating home video:", error);
@@ -115,6 +117,7 @@ const HomeSettingsTab = ({ user }) => {
       }, { merge: true });
       setHomeVideoUrl('');
       if (homeVideoInputRef.current) homeVideoInputRef.current.value = '';
+      await logAdminAction('UPDATE', 'HomeSettings', 'Reverted Home background video to default');
       alert("Reverted to default background video.");
     } catch (error) {
       console.error("Error reverting home video:", error);

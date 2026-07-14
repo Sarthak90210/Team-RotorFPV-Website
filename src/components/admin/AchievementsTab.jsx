@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { uploadFile, deleteCloudinaryImage } from '../../lib/adminApi';
+import { uploadFile, deleteCloudinaryImage, logAdminAction } from '../../lib/adminApi';
 
 const EMPTY_FORM = { title: '', year: '', description: '', imageUrl: '', order: 0 };
 
@@ -84,6 +84,7 @@ const AchievementsTab = () => {
         for (const url of item.images || []) {
           await deleteCloudinaryImage(url);
         }
+        await logAdminAction('DELETE', 'Achievement', `Deleted achievement: ${item.title}`);
       } catch (error) {
         console.error("Delete Error:", error);
         alert("Failed to delete. You might not have permission.");
@@ -112,8 +113,10 @@ const AchievementsTab = () => {
           }
         }
         await updateDoc(doc(db, 'achievements', editingId), dataToSave);
+        await logAdminAction('UPDATE', 'Achievement', `Updated achievement: ${dataToSave.title}`);
       } else {
         await addDoc(collection(db, 'achievements'), dataToSave);
+        await logAdminAction('CREATE', 'Achievement', `Created achievement: ${dataToSave.title}`);
       }
       resetForm();
     } catch (error) {
