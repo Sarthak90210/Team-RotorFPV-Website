@@ -316,6 +316,25 @@
   }
 }
 @media (max-width: 768px) {
-  .inventory-3col-layout { grid-template-columns: 1fr; }
-  .inventory-sidebar { display: none; }
+  .inventory-3col-layout { 
+    grid-template-columns: 1fr; 
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: unset;
+  }
+  .inventory-sidebar { 
+    height: auto; 
+    max-height: 250px;
+  }
+  .inventory-middle {
+    height: 600px;
+    flex-shrink: 0;
+  }
+}
+@media (max-width: 480px) {
+  .flex-between {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
 }

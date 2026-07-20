@@ -11,6 +11,7 @@ const TagsTab = ({ user }) => {
   const [newGrantsSuperAdmin, setNewGrantsSuperAdmin] = useState(false);
   const [newIsGroup, setNewIsGroup] = useState(true);
   const [newIsExMember, setNewIsExMember] = useState(false);
+  const [newGrantsTags, setNewGrantsTags] = useState([]);
 
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
@@ -18,6 +19,7 @@ const TagsTab = ({ user }) => {
   const [editingGrantsSuperAdmin, setEditingGrantsSuperAdmin] = useState(false);
   const [editingIsGroup, setEditingIsGroup] = useState(true);
   const [editingIsExMember, setEditingIsExMember] = useState(false);
+  const [editingGrantsTags, setEditingGrantsTags] = useState([]);
 
   useEffect(() => {
     const q = query(collection(db, 'tags'), orderBy('name', 'asc'));
@@ -37,7 +39,8 @@ const TagsTab = ({ user }) => {
         grantsAdmin: newGrantsAdmin,
         grantsSuperAdmin: newGrantsSuperAdmin,
         isGroup: newIsGroup,
-        isExMember: newIsExMember
+        isExMember: newIsExMember,
+        grantsTags: newGrantsTags
       });
       await logAdminAction('tag_created', 'system', `Created tag: ${newTagName.trim()}`);
       
@@ -46,6 +49,7 @@ const TagsTab = ({ user }) => {
       setNewGrantsSuperAdmin(false);
       setNewIsGroup(true);
       setNewIsExMember(false);
+      setNewGrantsTags([]);
     } catch (error) {
       console.error("Error adding tag:", error);
       alert("Failed to add tag");
@@ -71,6 +75,7 @@ const TagsTab = ({ user }) => {
     setEditingGrantsSuperAdmin(tag.grantsSuperAdmin || false);
     setEditingIsGroup(tag.isGroup !== undefined ? tag.isGroup : true);
     setEditingIsExMember(tag.isExMember || false);
+    setEditingGrantsTags(tag.grantsTags || []);
   };
 
   const handleSaveEdit = async (id, oldName) => {
@@ -81,7 +86,8 @@ const TagsTab = ({ user }) => {
         grantsAdmin: editingGrantsAdmin,
         grantsSuperAdmin: editingGrantsSuperAdmin,
         isGroup: editingIsGroup,
-        isExMember: editingIsExMember
+        isExMember: editingIsExMember,
+        grantsTags: editingGrantsTags
       });
       await logAdminAction('tag_updated', 'system', `Updated tag: ${editingName.trim()}`);
       setEditingId(null);
@@ -140,6 +146,28 @@ const TagsTab = ({ user }) => {
               />
               <label style={{ margin: 0, color: '#9ca3af' }}>Ex-Member Tag (Hides them from Inventory)</label>
             </div>
+            
+            {tags.length > 0 && (
+              <div className="form-group" style={{ marginTop: '15px' }}>
+                <label style={{ fontSize: '0.9rem', marginBottom: '8px' }}>Automatically Grants Tags (1-level):</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {tags.map(t => (
+                    <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={newGrantsTags.includes(t.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setNewGrantsTags([...newGrantsTags, t.id]);
+                          else setNewGrantsTags(newGrantsTags.filter(id => id !== t.id));
+                        }}
+                      />
+                      {t.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="form-actions" style={{ marginTop: '15px' }}>
               <button type="submit" className="admin-btn primary">Create Tag</button>
             </div>
@@ -175,6 +203,26 @@ const TagsTab = ({ user }) => {
                         <input type="checkbox" checked={editingIsExMember} onChange={e => setEditingIsExMember(e.target.checked)} /> Ex-Member
                       </label>
                     </div>
+                    
+                    <div style={{ marginBottom: '10px' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)', display: 'block', marginBottom: '4px' }}>Automatically Grants Tags (1-level):</label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {tags.filter(t => t.id !== tag.id).map(t => (
+                          <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={editingGrantsTags.includes(t.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) setEditingGrantsTags([...editingGrantsTags, t.id]);
+                                else setEditingGrantsTags(editingGrantsTags.filter(id => id !== t.id));
+                              }}
+                            />
+                            {t.name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="card-actions">
                       <button onClick={() => handleSaveEdit(tag.id, tag.name)} className="admin-btn primary small">Save</button>
                       <button onClick={() => setEditingId(null)} className="admin-btn secondary small">Cancel</button>
@@ -191,6 +239,11 @@ const TagsTab = ({ user }) => {
                         {tag.grantsAdmin && <span className="role-badge admin">Admin</span>}
                         {tag.grantsSuperAdmin && <span className="role-badge super">Super Admin</span>}
                         {tag.isExMember && <span className="role-badge" style={{ background: 'rgba(255,255,255,0.1)', color: '#9ca3af' }}>Ex-Member</span>}
+                        {tag.grantsTags && tag.grantsTags.length > 0 && (
+                          <span className="role-badge" style={{ background: 'rgba(100,255,218,0.1)', color: 'var(--accent)' }}>
+                            +{tag.grantsTags.length} Auto-assigned
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="card-actions">

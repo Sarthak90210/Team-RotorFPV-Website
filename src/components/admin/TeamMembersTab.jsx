@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { logAdminAction, fetchAdmins, apiPost } from '../../lib/adminApi';
+import { logAdminAction, fetchAdmins, apiPost, uploadFile, syncUserPermissions } from '../../lib/adminApi';
+import { expandTagIds, getGrantedTagIds } from '../../lib/tagGrants';
 import TagsTab from './TagsTab';
 import CustomFieldsTab from './CustomFieldsTab';
 import PillNav from '../PillNav';
@@ -20,9 +21,15 @@ const TeamMembersTab = ({ user }) => {
     name: '',
     email: '',
     roomNumber: '',
+    jobTitle: '',
+    linkedin: '',
+    github: '',
+    image: '',
     tags: [],
     customFields: {}
   });
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = React.useRef(null);
 
   const refreshAdmins = async () => {
     try {
@@ -56,7 +63,7 @@ const TeamMembersTab = ({ user }) => {
 
   const handleStartAdd = () => {
     setEditingEmail('__new__');
-    setFormData({ name: '', email: '', roomNumber: '', tags: [], customFields: {} });
+    setFormData({ name: '', email: '', roomNumber: '', jobTitle: '', linkedin: '', github: '', image: '', tags: [], customFields: {} });
   };
 
   const handleStartEdit = (usr) => {
@@ -65,6 +72,10 @@ const TeamMembersTab = ({ user }) => {
       name: usr.name || '',
       email: usr.email || '',
       roomNumber: usr.roomNumber || '',
+      jobTitle: usr.jobTitle || '',
+      linkedin: usr.linkedin || '',
+      github: usr.github || '',
+      image: usr.image || '',
       tags: usr.tags || [],
       customFields: usr.customFields || {}
     });
@@ -72,49 +83,6 @@ const TeamMembersTab = ({ user }) => {
 
   const handleCancelEdit = () => {
     setEditingEmail(null);
-  };
-
-  const syncPermissions = async (email, selectedTagIds) => {
-    let targetIsAdmin = false;
-    let targetIsSuperAdmin = false;
-
-    // Calculate desired permissions from tags
-    for (const tagId of selectedTagIds) {
-      const tag = tags.find(t => t.id === tagId);
-      if (tag?.grantsAdmin) targetIsAdmin = true;
-      if (tag?.grantsSuperAdmin) {
-        targetIsAdmin = true; // Super admin implies admin
-        targetIsSuperAdmin = true;
-      }
-    }
-
-    const currentAdminRec = admins.find(a => a.email === email);
-    
-    // Safety check: Never demote root through this UI
-    if (currentAdminRec?.isRoot) {
-      return;
-    }
-
-    const currentIsAdmin = !!currentAdminRec;
-    const currentIsSuperAdmin = currentAdminRec?.isSuperAdmin || false;
-
-    // Handle Admin Promotion/Demotion
-    if (targetIsAdmin && !currentIsAdmin) {
-      await apiPost('/api/setAdmin', { email });
-    } else if (!targetIsAdmin && currentIsAdmin) {
-      await apiPost('/api/removeAdmin', { email });
-    }
-
-    // Handle Super Admin Promotion/Demotion
-    if (targetIsSuperAdmin && !currentIsSuperAdmin) {
-      await apiPost('/api/setSuperAdmin', { email });
-    } else if (!targetIsSuperAdmin && currentIsSuperAdmin) {
-      await apiPost('/api/removeSuperAdmin', { email });
-    }
-
-    if (targetIsAdmin !== currentIsAdmin || targetIsSuperAdmin !== currentIsSuperAdmin) {
-      await refreshAdmins();
-    }
   };
 
   const handleSave = async (e) => {
@@ -128,14 +96,19 @@ const TeamMembersTab = ({ user }) => {
         email,
         name: formData.name.trim(),
         roomNumber: formData.roomNumber.trim(),
-        tags: formData.tags,
+        jobTitle: formData.jobTitle?.trim() || '',
+        linkedin: formData.linkedin?.trim() || '',
+        github: formData.github?.trim() || '',
+        image: formData.image?.trim() || '',
+        tags: expandTagIds(formData.tags, tags),
         customFields: formData.customFields,
       };
 
       const isNew = editingEmail === '__new__';
       
       await setDoc(doc(db, 'users', email), payload, { merge: true });
-      await syncPermissions(email, formData.tags);
+      await syncUserPermissions(email, payload.tags, tags, admins);
+      await refreshAdmins();
       
       if (isNew) {
         await logAdminAction('team_member_created', 'system', `Created team member: ${email}`);
@@ -163,13 +136,36 @@ const TeamMembersTab = ({ user }) => {
 
     if (!window.confirm(`Delete profile for ${email}? This will completely remove them and their permissions.`)) return;
     try {
-      // Sync permissions with empty tags to remove admin rights
-      await syncPermissions(email, []);
-      await deleteDoc(doc(db, 'users', email));
-      await logAdminAction('team_member_deleted', 'system', `Deleted team member: ${email}`);
+      // Instead of hard deleting, we just remove permissions and mark inactive if they might be on a board.
+      // We'll soft-delete by un-tagging and adding an archived flag.
+      await syncUserPermissions(email, [], tags, admins);
+      await setDoc(doc(db, 'users', email), { isActive: false, isArchived: true, tags: [] }, { merge: true });
+      await logAdminAction('team_member_archived', 'system', `Archived team member: ${email}`);
     } catch (error) {
-      console.error("Error deleting user:", error);
-      alert("Failed to delete user");
+      console.error("Error archiving user:", error);
+      alert("Failed to archive user");
+    }
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const folder = `users/${formData.email || 'new'}`;
+      const { ok, data: uploadedImage } = await uploadFile(file, folder);
+      if (ok && uploadedImage.secure_url) {
+        setFormData(prev => ({ ...prev, image: uploadedImage.secure_url }));
+      } else {
+        alert(uploadedImage.error || "Upload failed.");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert("Error uploading image.");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -179,7 +175,10 @@ const TeamMembersTab = ({ user }) => {
       if (current.includes(tagId)) {
         return { ...prev, tags: current.filter(id => id !== tagId) };
       } else {
-        return { ...prev, tags: [...current, tagId] };
+        const tag = tags.find(t => t.id === tagId);
+        const granted = getGrantedTagIds(tag, tags);
+        const toAdd = [tagId, ...granted].filter(id => !current.includes(id));
+        return { ...prev, tags: [...current, ...toAdd] };
       }
     });
   };
@@ -269,6 +268,63 @@ const TeamMembersTab = ({ user }) => {
                 />
               </div>
 
+              <div className="form-group">
+                <label>Job Title / Current Status</label>
+                <input
+                  type="text"
+                  value={formData.jobTitle}
+                  onChange={(e) => setFormData({...formData, jobTitle: e.target.value})}
+                  placeholder="e.g. Software Engineer at Google"
+                />
+              </div>
+
+              <div className="form-row" style={{ display: 'flex', gap: '10px' }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>LinkedIn URL</label>
+                  <input
+                    type="url"
+                    value={formData.linkedin}
+                    onChange={(e) => setFormData({...formData, linkedin: e.target.value})}
+                    placeholder="https://linkedin.com/in/..."
+                  />
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>GitHub URL</label>
+                  <input
+                    type="url"
+                    value={formData.github}
+                    onChange={(e) => setFormData({...formData, github: e.target.value})}
+                    placeholder="https://github.com/..."
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Profile Image</label>
+                <div className="file-upload">
+                  <input
+                    type="file"
+                    accept="image/*,.heic,.heif"
+                    ref={fileInputRef}
+                    onChange={handleImageUpload}
+                    disabled={isUploading}
+                  />
+                  {isUploading && <span className="upload-status">Uploading…</span>}
+                </div>
+                <div className="input-divider">or</div>
+                <input
+                  type="url"
+                  value={formData.image}
+                  onChange={(e) => setFormData({...formData, image: e.target.value})}
+                  placeholder="Paste an image URL directly"
+                />
+                {formData.image && (
+                  <div className="image-preview achievement" style={{ marginTop: '10px' }}>
+                    <img src={formData.image} alt="Profile Preview" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover' }} />
+                  </div>
+                )}
+              </div>
+
               {customFields.length > 0 && (
                 <>
                   <h3 style={{ fontSize: '0.95rem', margin: '20px 0 10px' }}>Dynamic Fields</h3>
@@ -325,15 +381,27 @@ const TeamMembersTab = ({ user }) => {
 
       <div className="admin-right-column">
         <div className="admin-glass-panel list-panel">
-          <div style={{ width: '100%', marginBottom: '20px' }}>
-            <PillNav 
-              items={[
-                { key: 'all', label: 'All' },
-                ...tags.filter(t => t.isGroup !== false).map(t => ({ key: t.id, label: t.name }))
-              ]}
-              activeKey={selectedTagFilter}
-              onItemClick={setSelectedTagFilter}
-            />
+          <div style={{ width: '100%', marginBottom: '20px', display: 'flex', gap: '15px', alignItems: 'center' }}>
+            <label style={{ color: '#64ffda', fontWeight: 'bold' }}>Filter by Group:</label>
+            <select 
+              value={selectedTagFilter} 
+              onChange={(e) => setSelectedTagFilter(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: '1px solid rgba(100, 255, 218, 0.3)',
+                background: 'rgba(10, 25, 47, 0.8)',
+                color: '#e6f1ff',
+                outline: 'none',
+                minWidth: '200px',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="all">All Members</option>
+              {tags.filter(t => t.isGroup !== false).map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
           </div>
           <div className="achievements-list">
             {(() => {
@@ -354,7 +422,9 @@ const TeamMembersTab = ({ user }) => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
                     <div>
                       <h3 style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {usr.image && <img src={usr.image} style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} alt="" />}
                         {usr.name || 'Unnamed'} 
+                        {usr.isArchived && <span className="role-badge" style={{ background: '#ff4d4f44', color: '#ff4d4f' }}>Archived</span>}
                       </h3>
                       {usr.isOrphanedAdmin && (
                         <div style={{ fontSize: '0.8rem', color: 'var(--warning, #faad14)', marginTop: '4px' }}>
@@ -391,7 +461,14 @@ const TeamMembersTab = ({ user }) => {
               });
 
               // Only show untagged members in "All" view
-              const untaggedMembers = selectedTagFilter === 'all' ? mergedMembers.filter(m => !(m.tags || []).length) : [];
+              // A member is untagged if they have no tags, or all their tags are deleted
+              const validTagIds = new Set(tags.map(t => t.id));
+              const untaggedMembers = selectedTagFilter === 'all' 
+                ? mergedMembers.filter(m => {
+                    const validUserTags = (m.tags || []).filter(tid => validTagIds.has(tid));
+                    return validUserTags.length === 0;
+                  }) 
+                : [];
 
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>

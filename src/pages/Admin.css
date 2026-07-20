@@ -1173,3 +1173,66 @@
   margin-top: 20px;
 }
 
+/* ===================================================================
+   Mobile Responsiveness Fixes
+   =================================================================== */
+
+@media (max-width: 768px) {
+  .admin-container {
+    padding: 100px 16px 40px;
+  }
+  
+  .admin-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .admin-header h1 {
+    font-size: 1.6rem;
+  }
+  
+  .user-info {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .admin-tabs {
+    gap: 8px;
+  }
+  
+  .admin-tab {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    flex: 1 1 auto;
+    text-align: center;
+  }
+  
+  .admin-glass-panel {
+    padding: 20px 16px;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-container {
+    padding: 90px 12px 30px;
+  }
+  
+  .user-info {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .admin-glass-panel {
+    padding: 16px 12px;
+  }
+  
+  .admin-tab {
+    width: 100%;
+  }
+}
+

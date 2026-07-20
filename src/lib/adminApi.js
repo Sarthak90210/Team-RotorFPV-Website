@@ -168,3 +168,47 @@ export async function fetchLogs() {
   if (!ok) throw new Error(data.error || 'Failed to fetch logs');
   return data.logs || [];
 }
+
+// Synchronize a user's admin/super-admin permissions based on their tags.
+// email: The user's email
+// selectedTagIds: Array of tag IDs the user currently has
+// allTags: Array of all tag objects from Firestore
+// currentAdmins: Array of all admin objects from /api/admins
+export async function syncUserPermissions(email, selectedTagIds, allTags, currentAdmins) {
+  let targetIsAdmin = false;
+  let targetIsSuperAdmin = false;
+
+  // Calculate desired permissions from tags
+  for (const tagId of selectedTagIds) {
+    const tag = allTags.find(t => t.id === tagId);
+    if (tag?.grantsAdmin) targetIsAdmin = true;
+    if (tag?.grantsSuperAdmin) {
+      targetIsAdmin = true; // Super admin implies admin
+      targetIsSuperAdmin = true;
+    }
+  }
+
+  const currentAdminRec = currentAdmins.find(a => a.email === email);
+  
+  // Safety check: Never demote root through this UI
+  if (currentAdminRec?.isRoot) {
+    return;
+  }
+
+  const currentIsAdmin = !!currentAdminRec;
+  const currentIsSuperAdmin = currentAdminRec?.isSuperAdmin || false;
+
+  // Handle Admin Promotion/Demotion
+  if (targetIsAdmin && !currentIsAdmin) {
+    await apiPost('/api/setAdmin', { email });
+  } else if (!targetIsAdmin && currentIsAdmin) {
+    await apiPost('/api/removeAdmin', { email });
+  }
+
+  // Handle Super Admin Promotion/Demotion
+  if (targetIsSuperAdmin && !currentIsSuperAdmin) {
+    await apiPost('/api/setSuperAdmin', { email });
+  } else if (!targetIsSuperAdmin && currentIsSuperAdmin) {
+    await apiPost('/api/removeSuperAdmin', { email });
+  }
+}

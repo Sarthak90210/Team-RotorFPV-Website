@@ -3,7 +3,7 @@ import GlassSurface from '../components/GlassSurface';
 import ShinyText from '../components/ShinyText';
 import TiltedCard from '../components/TiltedCard';
 import { FaLinkedin, FaGithub } from 'react-icons/fa';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Seo from '../components/Seo';
 import './Board.css';
@@ -119,13 +119,27 @@ const Board = () => {
 
     // 2. Fetch active members
     const qMembers = query(collection(db, 'team_members'), orderBy('order', 'asc'));
-    const unsubMembers = onSnapshot(qMembers, (snapshot) => {
+    const unsubMembers = onSnapshot(qMembers, async (snapshot) => {
+      
+      const rawMembers = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.isActive !== false);
+      const userIds = [...new Set(rawMembers.map(m => m.userId).filter(Boolean))];
+
+      // Fetch all referenced users
+      const usersMap = {};
+      try {
+        const userDocs = await Promise.all(userIds.map(id => getDoc(doc(db, 'users', id))));
+        userDocs.forEach(d => {
+          if (d.exists()) {
+            usersMap[d.id] = d.data();
+          }
+        });
+      } catch (err) {
+        console.error("Error fetching users for board:", err);
+      }
+
       const newTeamData = {};
       
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        if (data.isActive === false) return; // Skip inactive members
-        
+      rawMembers.forEach(data => {
         const year = data.year;
         if (!newTeamData[year]) {
           newTeamData[year] = getEmptyYear();
@@ -133,9 +147,20 @@ const Board = () => {
         
         let category = data.category || 'leaders';
         if (category === 'miscellaneous') category = 'essential';
-        // Safety check just in case an unknown category exists
+        
+        // Merge user data
+        const userData = usersMap[data.userId] || {};
+        const mergedMember = {
+          ...data,
+          name: userData.name || data.name || 'Unknown',
+          image: userData.image || data.image || '',
+          linkedin: userData.linkedin || data.linkedin || '',
+          github: userData.github || data.github || '',
+          jobTitle: userData.jobTitle || data.jobTitle || ''
+        };
+
         if (newTeamData[year][category]) {
-          newTeamData[year][category].push({ id: doc.id, ...data });
+          newTeamData[year][category].push(mergedMember);
         }
       });
       
