@@ -23,6 +23,7 @@ const Gallery = lazy(() => import('./pages/Gallery'));
 const Board = lazy(() => import('./pages/Board'));
 const SponsorUs = lazy(() => import('./pages/SponsorUs'));
 const FormalAchievements = lazy(() => import('./pages/FormalAchievements'));
+const Inventory = lazy(() => import('./pages/Inventory'));
 
 // The contact form moved to the home page. Keep old /contact links working by
 // redirecting to home and scrolling to the contact section.
@@ -94,6 +95,8 @@ function AppContent() {
             <Route path="/drones" element={<Drones />} />
             <Route path="/contact" element={<ContactRedirect />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/inventory" element={<Inventory />} />
+            <Route path="/inv" element={<Navigate to="/inventory" replace />} />
             </Routes>
           </Suspense>
         </ErrorBoundary>

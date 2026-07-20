@@ -208,7 +208,15 @@ app.post('/api/setAdmin', verifySuperAdmin, async (req, res) => {
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
   try {
-    const userRecord = await getAuth().getUserByEmail(email);
+    let userRecord;
+    try {
+      userRecord = await getAuth().getUserByEmail(email);
+    } catch (err) {
+      if (err.code === 'auth/user-not-found') {
+        userRecord = await getAuth().createUser({ email });
+      } else throw err;
+    }
+
     const isSuper = userRecord.customClaims?.superAdmin === true;
     await getAuth().setCustomUserClaims(userRecord.uid, { admin: true, superAdmin: isSuper });
     await db.collection('admins').doc(email).set({ email, isSuperAdmin: isSuper, isRoot: email === process.env.SUPER_ADMIN_EMAIL }, { merge: true });
@@ -216,7 +224,6 @@ app.post('/api/setAdmin', verifySuperAdmin, async (req, res) => {
     res.json({ message: `Successfully granted admin privileges to ${email}` });
   } catch (error) {
     console.error('Error setting admin:', error);
-    if (error.code === 'auth/user-not-found') return res.status(404).json({ error: 'User not found. They must sign in at least once first.' });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -234,7 +241,18 @@ app.post('/api/removeAdmin', verifySuperAdmin, async (req, res) => {
   }
 
   try {
-    const userRecord = await getAuth().getUserByEmail(email);
+    let userRecord;
+    try {
+      userRecord = await getAuth().getUserByEmail(email);
+    } catch (err) {
+      if (err.code === 'auth/user-not-found') {
+        // User doesn't exist in Auth, just clean up Firestore and return success
+        await db.collection('admins').doc(email).delete();
+        await logAudit('revoked admin from', req.user.email, email);
+        return res.json({ message: `Successfully revoked admin privileges from ${email}` });
+      } else throw err;
+    }
+
     if (userRecord.customClaims?.superAdmin === true) {
       const adminsSnapshot = await db.collection('admins').where('isSuperAdmin', '==', true).get();
       if (adminsSnapshot.size <= 1 && req.user.email !== process.env.SUPER_ADMIN_EMAIL) {
@@ -259,14 +277,21 @@ app.post('/api/setSuperAdmin', verifySuperAdmin, async (req, res) => {
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
   try {
-    const userRecord = await getAuth().getUserByEmail(email);
+    let userRecord;
+    try {
+      userRecord = await getAuth().getUserByEmail(email);
+    } catch (err) {
+      if (err.code === 'auth/user-not-found') {
+        userRecord = await getAuth().createUser({ email });
+      } else throw err;
+    }
+    
     await getAuth().setCustomUserClaims(userRecord.uid, { admin: true, superAdmin: true });
     await db.collection('admins').doc(email).set({ email, isSuperAdmin: true, isRoot: email === process.env.SUPER_ADMIN_EMAIL }, { merge: true });
     await logAudit('promoted to super admin', req.user.email, email);
     res.json({ message: `Successfully promoted ${email} to Super Admin` });
   } catch (error) {
     console.error('Error setting super admin:', error);
-    if (error.code === 'auth/user-not-found') return res.status(404).json({ error: 'User not found.' });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -289,7 +314,18 @@ app.post('/api/removeSuperAdmin', verifySuperAdmin, async (req, res) => {
        return res.status(400).json({ error: 'At least one Super Admin must remain.' });
     }
 
-    const userRecord = await getAuth().getUserByEmail(email);
+    let userRecord;
+    try {
+      userRecord = await getAuth().getUserByEmail(email);
+    } catch (err) {
+      if (err.code === 'auth/user-not-found') {
+        // User doesn't exist, just clean up Firestore
+        await db.collection('admins').doc(email).set({ isSuperAdmin: false }, { merge: true });
+        await logAudit('demoted from super admin', req.user.email, email);
+        return res.json({ message: `Successfully demoted ${email} to regular Admin` });
+      } else throw err;
+    }
+
     await getAuth().setCustomUserClaims(userRecord.uid, { admin: true, superAdmin: false });
     await getAuth().revokeRefreshTokens(userRecord.uid);
     await db.collection('admins').doc(email).set({ isSuperAdmin: false }, { merge: true });
@@ -814,13 +850,17 @@ app.get('/api/logs', verifySuperAdmin, async (req, res) => {
 
     auditSnap.forEach(doc => {
       const data = doc.data();
+      const isRoleChange = !!data.targetEmail;
+      
       logs.push({
         id: doc.id,
         type: 'audit',
         user: data.userEmail,
-        action: 'ROLE_CHANGE',
-        target: data.targetEmail,
-        details: `${data.action} ${data.targetEmail}`,
+        action: isRoleChange ? 'ROLE_CHANGE' : 'INVENTORY_UPDATE',
+        target: isRoleChange ? data.targetEmail : 'Inventory',
+        details: isRoleChange 
+          ? `${data.action} ${data.targetEmail}` 
+          : `${data.action}${data.newValue ? ` to ${data.newValue}` : ''}`,
         timestamp: data.timestamp?.toDate ? data.timestamp.toDate().toISOString() : new Date(data.timestamp).toISOString()
       });
     });

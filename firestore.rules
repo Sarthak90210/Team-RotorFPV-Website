@@ -54,6 +54,47 @@ service cloud.firestore {
     match /activity_logs/{docId} {
       allow read, create: if isAdmin();
     }
+
+    match /audit_logs/{docId} {
+      allow read, create: if isAdmin();
+    }
+
+    match /users/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /tags/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /custom_fields/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /inventory_lists/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /inventories/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /items/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /inventory_hold_history/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /item_history/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /inventory_movement_history/{docId} {
+      allow read, write: if isAdmin();
+    }
+
     // Deny everything else by default.
     // Any new collection must have explicit rules added above.
     match /{document=**} {

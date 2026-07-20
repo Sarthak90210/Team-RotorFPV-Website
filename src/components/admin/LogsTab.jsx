@@ -10,7 +10,7 @@ const LogsTab = () => {
   const FILTERS = [
     { key: 'all', label: 'All Logs' },
     { key: 'activity', label: 'Website Changes' },
-    { key: 'audit', label: 'Admin Roles' },
+    { key: 'audit', label: 'Admin & Inventory' },
     { key: 'contact', label: 'Contact Messages' }
   ];
 
