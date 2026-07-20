@@ -3,12 +3,12 @@ import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from
 import { auth } from '../firebase';
 import './Admin.css'; // Reusing the exact same UI styles as the Admin panel
 
-import InventoryListsTab from '../components/inventory/InventoryListsTab';
+import { InventoryProvider } from '../components/inventory/InventoryContext';
+import InventoryLayout from '../components/inventory/InventoryLayout';
 
 const Inventory = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [pageTitle, setPageTitle] = useState('Inventory Lists');
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -92,16 +92,18 @@ const Inventory = () => {
 
   return (
     <div className="admin-container">
-      <div className="admin-header">
-        <h1>{pageTitle}</h1>
+      <div className="admin-header" style={{ paddingBottom: '0', borderBottom: 'none' }}>
+        <div></div> {/* spacer */}
         <div className="user-info">
           <span className="user-email">{user.email}</span>
           <button onClick={handleLogout} className="admin-btn secondary">Sign Out</button>
         </div>
       </div>
 
-      <div className="admin-content">
-        <InventoryListsTab user={user} setPageTitle={setPageTitle} />
+      <div className="admin-content" style={{ padding: '0 20px 20px' }}>
+        <InventoryProvider user={user}>
+          <InventoryLayout />
+        </InventoryProvider>
       </div>
     </div>
   );

@@ -65,11 +65,23 @@ const SponsorUs = () => {
     );
   }
 
+  const getBrochureDownloadName = () => {
+    let name = settings?.brochure?.name || "RotorFPV_Brochure.pdf";
+    if (!name.toLowerCase().endsWith('.pdf')) {
+      name += '.pdf';
+    }
+    return name;
+  };
+
   const getDownloadUrl = (url) => {
     if (!url) return "#";
     
     // Raw files (PDFs) don't support image transformations, they download by default with the download attribute
     if (url.includes('/raw/upload/')) {
+      // Force attachment if possible or just use the original URL
+      if (url.includes('cloudinary.com') && !url.includes('fl_attachment')) {
+        return url.replace('/upload/', '/upload/fl_attachment/');
+      }
       return url;
     }
 
@@ -125,7 +137,7 @@ const SponsorUs = () => {
                   href={getDownloadUrl(settings?.brochure?.url)} 
                   target={settings?.brochure?.url ? "_blank" : "_self"} 
                   rel="noreferrer" 
-                  download={settings?.brochure?.name || "RotorFPV_Brochure.pdf"}
+                  download={getBrochureDownloadName()}
                   className="brochure-btn"
                   onClick={(e) => {
                     if (!settings?.brochure?.url) {
