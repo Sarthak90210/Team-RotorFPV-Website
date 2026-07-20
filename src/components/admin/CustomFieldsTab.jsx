@@ -89,6 +89,32 @@ const CustomFieldsTab = ({ user }) => {
         <div className="admin-glass-panel list-panel">
           <h2>Existing Fields</h2>
           <div className="achievements-list">
+            {/* Built-in locked fields */}
+            <div className="admin-achievement-card admin-user-card" style={{ opacity: 0.8 }}>
+              <div className="card-info">
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  Name
+                  <span style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', color: '#8892b0' }}>Built-in</span>
+                </h3>
+              </div>
+              <div className="card-actions">
+                <span style={{ fontSize: '12px', color: '#8892b0', fontStyle: 'italic' }}>Locked</span>
+              </div>
+            </div>
+            
+            <div className="admin-achievement-card admin-user-card" style={{ opacity: 0.8 }}>
+              <div className="card-info">
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  Room No
+                  <span style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', color: '#8892b0' }}>Built-in</span>
+                </h3>
+              </div>
+              <div className="card-actions">
+                <span style={{ fontSize: '12px', color: '#8892b0', fontStyle: 'italic' }}>Locked</span>
+              </div>
+            </div>
+
+            {/* Dynamic fields */}
             {fields.map(field => (
               <div key={field.id} className="admin-achievement-card admin-user-card">
                 <div className="card-info">
