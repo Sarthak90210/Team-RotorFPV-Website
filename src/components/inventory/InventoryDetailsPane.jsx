@@ -307,14 +307,22 @@ const InventoryDetailsPane = () => {
     if (window.confirm(`Move ${selectedSubInvs.size} sub-inventories to ${target.name}?`)) {
       try {
         const batch = writeBatch(db);
+        let movedCount = 0;
         selectedSubInvs.forEach(invId => {
-          batch.update(doc(db, 'inventories', invId), {
-            listId: targetListId,
-            parentInventoryId: targetParentId
-          });
+          const inv = inventories.find(i => i.id === invId);
+          if (inv && (inv.parentInventoryId !== targetParentId || inv.listId !== targetListId)) {
+            batch.update(doc(db, 'inventories', invId), {
+              listId: targetListId,
+              parentInventoryId: targetParentId
+            });
+            movedCount++;
+          }
         });
-        await batch.commit();
-        await logInventoryAction(`Bulk moved ${selectedSubInvs.size} sub-inventories to ${target.name}`);
+        
+        if (movedCount > 0) {
+          await batch.commit();
+          await logInventoryAction(`Bulk moved ${movedCount} sub-inventories to ${target.name}`);
+        }
         
         setIsSubInvSelectionMode(false);
         setSelectedSubInvs(new Set());
@@ -333,11 +341,13 @@ const InventoryDetailsPane = () => {
       try {
         const batch = writeBatch(db);
         const timestamp = new Date().toISOString();
+        let movedCount = 0;
         
         selectedItems.forEach(itemId => {
           const item = items.find(i => i.id === itemId);
-          if (!item) return;
+          if (!item || item.inventoryId === target.id) return;
 
+          movedCount++;
           // Update item
           batch.update(doc(db, 'items', itemId), { inventoryId: target.id });
           
@@ -354,8 +364,10 @@ const InventoryDetailsPane = () => {
           });
         });
         
-        await batch.commit();
-        await logInventoryAction(`Bulk moved ${selectedItems.size} items to ${target.name}.`);
+        if (movedCount > 0) {
+          await batch.commit();
+          await logInventoryAction(`Bulk moved ${movedCount} items to ${target.name}.`);
+        }
         
         setIsItemsSelectionMode(false);
         setSelectedItems(new Set());
@@ -370,9 +382,16 @@ const InventoryDetailsPane = () => {
   const handleQuickAction = async (action) => {
     setShowQuickActions(false);
     if (action === 'delete') {
+      const invId = selectedInventory.id;
+      const childInvs = inventories.filter(i => i.parentInventoryId === invId);
+      if (childInvs.length > 0) {
+        alert("Cannot delete inventory because it contains sub-inventories. Please delete or move them first.");
+        return;
+      }
+
       if (!window.confirm(`Delete inventory "${selectedInventory.name}" entirely? All items and history will be permanently deleted.`)) return;
       
-      const invId = selectedInventory.id;
+      const parentId = selectedInventory.parentInventoryId;
       
       // Delete items
       const itemQuery = query(collection(db, 'items'), where('inventoryId', '==', invId));
@@ -392,6 +411,7 @@ const InventoryDetailsPane = () => {
       // Delete the inventory itself
       await deleteDoc(doc(db, 'inventories', invId));
       await logInventoryAction(`Deleted Inventory: ${selectedInventory.name} (and all contents)`);
+      setSelectedInventoryId(parentId || null);
     } else if (action === 'markAvailable') {
       const now = new Date().toISOString();
       if (selectedInventory.currentHolder) {
@@ -415,6 +435,40 @@ const InventoryDetailsPane = () => {
       await logInventoryAction(`Marked "${selectedInventory.name}" as Available.`);
     } else if (action === 'markMissing') {
       await updateDoc(doc(db, 'inventories', selectedInventory.id), { status: 'Missing' });
+    }
+  };
+
+  const handleDeleteSubInv = async (inv) => {
+    const childInvs = inventories.filter(i => i.parentInventoryId === inv.id);
+    if (childInvs.length > 0) {
+      alert("Cannot delete because it contains nested sub-inventories.");
+      return;
+    }
+    if (!window.confirm(`Delete sub-inventory "${inv.name}" and all its items?`)) return;
+
+    try {
+      const invId = inv.id;
+      // Delete items
+      const itemQuery = query(collection(db, 'items'), where('inventoryId', '==', invId));
+      const itemSnap = await getDocs(itemQuery);
+      await Promise.all(itemSnap.docs.map(itemDoc => deleteDoc(doc(db, 'items', itemDoc.id))));
+      
+      // Delete item history
+      const itemHistQuery = query(collection(db, 'item_history'), where('inventoryId', '==', invId));
+      const itemHistSnap = await getDocs(itemHistQuery);
+      await Promise.all(itemHistSnap.docs.map(d => deleteDoc(doc(db, 'item_history', d.id))));
+
+      // Delete hold history
+      const holdHistQuery = query(collection(db, 'inventory_hold_history'), where('inventoryId', '==', invId));
+      const holdHistSnap = await getDocs(holdHistQuery);
+      await Promise.all(holdHistSnap.docs.map(d => deleteDoc(doc(db, 'inventory_hold_history', d.id))));
+
+      // Delete the inventory itself
+      await deleteDoc(doc(db, 'inventories', invId));
+      await logInventoryAction(`Deleted Sub-Inventory: ${inv.name}`);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to delete sub-inventory");
     }
   };
 
@@ -615,7 +669,7 @@ const InventoryDetailsPane = () => {
                   }}
                   className="inventory-card"
                 >
-                  <div className="card-title">
+                  <div className="card-title" style={{ display: 'flex', width: '100%', alignItems: 'center' }}>
                     {isSubInvSelectionMode && (
                       <input 
                         type="checkbox" 
@@ -632,6 +686,16 @@ const InventoryDetailsPane = () => {
                       />
                     )}
                     <span>{inv.name}</span>
+                    {!isSubInvSelectionMode && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleDeleteSubInv(inv); }}
+                        className="inv-btn ghost small"
+                        style={{ marginLeft: 'auto', color: '#ef4444', padding: '4px' }}
+                        title="Delete Sub-Inventory"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -934,8 +998,8 @@ const InventoryDetailsPane = () => {
         }}
         invalidTargets={
           destinationPickerType === 'subInvs' 
-            ? [...Array.from(selectedSubInvs).map(id => `inventory:${id}`), `inventory:${selectedInventory.id}`]
-            : [`inventory:${selectedInventory.id}`]
+            ? [...Array.from(selectedSubInvs).map(id => `inventory:${id}`)]
+            : []
         }
         allowedTypes={
           destinationPickerType === 'items'
