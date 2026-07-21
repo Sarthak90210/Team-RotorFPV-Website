@@ -9,7 +9,7 @@ import { Search } from 'lucide-react';
 import './Inventory.css';
 
 const InventoryLayout = () => {
-  const { isDetailsCollapsed, selectedList, selectedInventoryId, setIsSpotlightOpen, fullscreenPane } = useInventory();
+  const { selectedList, selectedInventoryId, setIsSpotlightOpen, fullscreenPane } = useInventory();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -34,7 +34,7 @@ const InventoryLayout = () => {
         </div>
       </div>
 
-      <div className={`inventory-3col-layout ${(!fullscreenPane && isDetailsCollapsed) ? 'collapsed-details' : ''} ${fullscreenPane ? 'fullscreen-' + fullscreenPane : ''}`}>
+      <div className={`inventory-3col-layout ${fullscreenPane ? 'fullscreen-' + fullscreenPane : ''}`}>
         <InventorySidebar />
         <InventoryMiddlePane />
         {selectedInventoryId ? (

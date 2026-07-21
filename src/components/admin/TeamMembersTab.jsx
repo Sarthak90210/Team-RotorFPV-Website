@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, getDocs, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { logAdminAction, fetchAdmins, apiPost, uploadFile, syncUserPermissions } from '../../lib/adminApi';
 import { expandTagIds, getGrantedTagIds } from '../../lib/tagGrants';
@@ -105,13 +105,32 @@ const TeamMembersTab = ({ user }) => {
       };
 
       const isNew = editingEmail === '__new__';
+      const isEmailChanged = !isNew && email !== editingEmail;
       
       await setDoc(doc(db, 'users', email), payload, { merge: true });
       await syncUserPermissions(email, payload.tags, tags, admins);
+      
+      if (isEmailChanged) {
+        // Remove old permissions for the previous email
+        await syncUserPermissions(editingEmail, [], tags, admins);
+        
+        // Delete the old user document
+        await deleteDoc(doc(db, 'users', editingEmail));
+        
+        // Update all related team_member records to the new email/userId
+        const qTeamMembers = query(collection(db, 'team_members'), where('userId', '==', editingEmail));
+        const tmSnap = await getDocs(qTeamMembers);
+        for (const tmDoc of tmSnap.docs) {
+          await updateDoc(doc(db, 'team_members', tmDoc.id), { userId: email });
+        }
+      }
+
       await refreshAdmins();
       
       if (isNew) {
         await logAdminAction('team_member_created', 'system', `Created team member: ${email}`);
+      } else if (isEmailChanged) {
+        await logAdminAction('team_member_updated', 'system', `Changed team member email from ${editingEmail} to ${email}`);
       } else {
         await logAdminAction('team_member_updated', 'system', `Updated team member: ${email}`);
       }
@@ -245,7 +264,6 @@ const TeamMembersTab = ({ user }) => {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  disabled={editingEmail !== '__new__'}
                   required
                 />
               </div>

@@ -20,7 +20,6 @@ export const InventoryProvider = ({ children, user }) => {
   // State
   const [selectedListId, setSelectedListId] = useState('dashboard');
   const [selectedInventoryId, setSelectedInventoryId] = useState(null);
-  const [isDetailsCollapsed, setIsDetailsCollapsed] = useState(false);
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
   const [fullscreenPane, setFullscreenPane] = useState(null); // 'list' | 'inventory' | null
 
@@ -133,9 +132,6 @@ export const InventoryProvider = ({ children, user }) => {
     setSelectedInventoryId,
     selectedInventory,
     listInventories,
-    
-    isDetailsCollapsed,
-    setIsDetailsCollapsed,
     
     isSpotlightOpen,
     setIsSpotlightOpen,

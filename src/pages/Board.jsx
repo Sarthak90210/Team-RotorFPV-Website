@@ -218,7 +218,7 @@ const Board = () => {
 
     pill.addEventListener('wheel', handleWheel, { passive: false });
     return () => pill.removeEventListener('wheel', handleWheel);
-  }, [activeYear, years]);
+  }, [activeYear, years, loading]);
 
   useEffect(() => {
     const handleWindowWheel = (e) => {
@@ -271,11 +271,35 @@ const Board = () => {
               }
             }
           } else {
-            overscrollAmountRef.current = 0;
+            // Reset if not at bottom
+            overscrollAmountRef.current = Math.min(0, overscrollAmountRef.current);
           }
-        } else {
-          // Scrolling up resets the overscroll amount
-          overscrollAmountRef.current = 0;
+        } else if (e.deltaY < 0) {
+          // Scrolling up! Check if at the top of the page
+          if (window.scrollY <= 50) {
+            overscrollAmountRef.current += e.deltaY; // deltaY is negative, so this becomes negative
+            
+            if (overscrollAmountRef.current < -300) {
+              const currentIndex = years.indexOf(activeYear);
+              if (currentIndex > 0) { // If there is a newer board
+                const prevYear = years[currentIndex - 1];
+                
+                isWheelScrollingRef.current = true;
+                overscrollAmountRef.current = 0;
+                
+                changeYear(prevYear);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                
+                // Unlock scrolling after regular animation
+                schedule(() => {
+                  isWheelScrollingRef.current = false;
+                }, 800);
+              }
+            }
+          } else {
+            // Reset if not at top
+            overscrollAmountRef.current = Math.max(0, overscrollAmountRef.current);
+          }
         }
       }
     };

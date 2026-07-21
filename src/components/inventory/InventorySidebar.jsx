@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useInventory } from './InventoryContext';
-import { collection, addDoc, deleteDoc, doc, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, updateDoc, doc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { logInventoryAction } from '../../lib/inventoryApi';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, MoreVertical, Archive, ArchiveRestore, ChevronDown, ChevronRight } from 'lucide-react';
 
 const InventorySidebar = () => {
   const { 
@@ -17,10 +17,16 @@ const InventorySidebar = () => {
   
   const [newListName, setNewListName] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+  const [isArchivedExpanded, setIsArchivedExpanded] = useState(false);
+
+  const activeLists = lists.filter(l => !l.isArchived);
+  const archivedLists = lists.filter(l => l.isArchived);
 
   const handleSelect = (id) => {
     setSelectedListId(id);
     setSelectedInventoryId(null);
+    setOpenDropdownId(null);
   };
 
   const handleAddList = async (e) => {
@@ -31,7 +37,10 @@ const InventorySidebar = () => {
       await addDoc(collection(db, 'inventory_lists'), { 
         name: newListName.trim(),
         createdAt: new Date().toISOString(),
-        createdBy: user.email
+        createdBy: user.email,
+        isArchived: false,
+        archivedAt: null,
+        archivedBy: null
       });
       await logInventoryAction(`Created Inventory List: ${newListName.trim()}`);
       setNewListName('');
@@ -39,6 +48,38 @@ const InventorySidebar = () => {
     } catch (error) {
       console.error("Error adding list:", error);
       alert("Failed to add list");
+    }
+  };
+
+  const handleArchiveList = async (e, list) => {
+    e.stopPropagation();
+    try {
+      await updateDoc(doc(db, 'inventory_lists', list.id), {
+        isArchived: true,
+        archivedAt: new Date().toISOString(),
+        archivedBy: user.email
+      });
+      await logInventoryAction(`Archived Inventory List: ${list.name}`);
+      setOpenDropdownId(null);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to archive list");
+    }
+  };
+
+  const handleRestoreList = async (e, list) => {
+    e.stopPropagation();
+    try {
+      await updateDoc(doc(db, 'inventory_lists', list.id), {
+        isArchived: false,
+        archivedAt: null,
+        archivedBy: null
+      });
+      await logInventoryAction(`Restored Inventory List: ${list.name}`);
+      setOpenDropdownId(null);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to restore list");
     }
   };
 
@@ -106,21 +147,82 @@ const InventorySidebar = () => {
           </form>
         )}
 
-        {lists.map(list => (
+        {activeLists.map(list => (
           <div 
             key={list.id}
             onClick={() => handleSelect(list.id)}
             className={`sidebar-item ${selectedListId === list.id ? 'selected' : ''}`}
           >
             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{list.name}</span>
-            <button 
-              className="del-btn"
-              onClick={(e) => handleDeleteList(e, list.id, list.name)}
-            >
-              <Trash2 size={14} />
-            </button>
+            <div className="quick-actions-wrapper" onClick={e => e.stopPropagation()}>
+              <button 
+                className="del-btn"
+                onClick={() => setOpenDropdownId(openDropdownId === list.id ? null : list.id)}
+              >
+                <MoreVertical size={14} />
+              </button>
+              {openDropdownId === list.id && (
+                <div className="quick-actions-menu" style={{ right: 0, top: '100%', minWidth: '120px' }}>
+                  <button onClick={(e) => handleArchiveList(e, list)}>
+                    <Archive size={14} style={{ marginRight: '6px' }} /> Archive
+                  </button>
+                  <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)', margin: '4px 0' }}></div>
+                  <button onClick={(e) => handleDeleteList(e, list.id, list.name)} className="danger">
+                    <Trash2 size={14} style={{ marginRight: '6px' }} /> Delete
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         ))}
+
+        {archivedLists.length > 0 && (
+          <div style={{ marginTop: '20px' }}>
+            <div 
+              style={{ padding: '0 10px', fontSize: '11px', color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', letterSpacing: '0.5px', fontWeight: 600, cursor: 'pointer' }}
+              onClick={() => setIsArchivedExpanded(!isArchivedExpanded)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                {isArchivedExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                <span>Archived ({archivedLists.length})</span>
+              </div>
+            </div>
+
+            {isArchivedExpanded && (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {archivedLists.map(list => (
+                  <div 
+                    key={list.id}
+                    onClick={() => handleSelect(list.id)}
+                    className={`sidebar-item ${selectedListId === list.id ? 'selected' : ''}`}
+                    style={{ opacity: 0.7 }}
+                  >
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{list.name}</span>
+                    <div className="quick-actions-wrapper" onClick={e => e.stopPropagation()}>
+                      <button 
+                        className="del-btn"
+                        onClick={() => setOpenDropdownId(openDropdownId === list.id ? null : list.id)}
+                      >
+                        <MoreVertical size={14} />
+                      </button>
+                      {openDropdownId === list.id && (
+                        <div className="quick-actions-menu" style={{ right: 0, top: '100%', minWidth: '120px' }}>
+                          <button onClick={(e) => handleRestoreList(e, list)}>
+                            <ArchiveRestore size={14} style={{ marginRight: '6px' }} /> Restore
+                          </button>
+                          <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)', margin: '4px 0' }}></div>
+                          <button onClick={(e) => handleDeleteList(e, list.id, list.name)} className="danger">
+                            <Trash2 size={14} style={{ marginRight: '6px' }} /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

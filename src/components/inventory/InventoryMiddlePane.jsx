@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useInventory } from './InventoryContext';
 import DashboardSummary from './DashboardSummary';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { logInventoryAction } from '../../lib/inventoryApi';
-import { User, Package, Maximize2, Plus } from 'lucide-react';
+import { User, Package, Maximize2, Plus, CheckSquare, Archive } from 'lucide-react';
+import BulkActionBar from './BulkActionBar';
+import DestinationPickerModal from './DestinationPickerModal';
 
 const InventoryMiddlePane = () => {
   const { 
@@ -15,15 +17,25 @@ const InventoryMiddlePane = () => {
     setSelectedInventoryId,
     user, 
     usersMap,
-    setIsDetailsCollapsed,
     toggleFullscreenList,
     fullscreenPane,
-    setFullscreenPane
+    setFullscreenPane,
+    inventories
   } = useInventory();
   
   const [newInventoryName, setNewInventoryName] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [itemCounts, setItemCounts] = useState({});
+
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedInventories, setSelectedInventories] = useState(new Set());
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+
+  // Clear selection when list changes
+  useEffect(() => {
+    setIsSelectionMode(false);
+    setSelectedInventories(new Set());
+  }, [selectedListId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -80,6 +92,51 @@ const InventoryMiddlePane = () => {
     return <span className={`inv-badge badge-${status.replace(/\s+/g, '')}`}>{status}</span>;
   };
 
+  const toggleSelection = (e, id) => {
+    e.stopPropagation();
+    const next = new Set(selectedInventories);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedInventories(next);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedInventories.size === listInventories.length) {
+      setSelectedInventories(new Set());
+    } else {
+      setSelectedInventories(new Set(listInventories.map(i => i.id)));
+    }
+  };
+
+  const handleBulkMove = async (target) => {
+    if (!target || selectedInventories.size === 0) return;
+    
+    const isMovingToList = target.type === 'list';
+    const targetListId = isMovingToList ? target.id : inventories.find(i => i.id === target.id)?.listId;
+    const targetParentId = isMovingToList ? null : target.id;
+    
+    if (window.confirm(`Move ${selectedInventories.size} inventories to ${target.name}?`)) {
+      try {
+        const batch = writeBatch(db);
+        selectedInventories.forEach(invId => {
+          batch.update(doc(db, 'inventories', invId), {
+            listId: targetListId,
+            parentInventoryId: targetParentId
+          });
+        });
+        await batch.commit();
+        await logInventoryAction(`Bulk moved ${selectedInventories.size} root inventories to ${target.name}`);
+        
+        setIsSelectionMode(false);
+        setSelectedInventories(new Set());
+        setIsPickerOpen(false);
+      } catch (err) {
+        console.error("Bulk move error:", err);
+        alert("Failed to bulk move inventories");
+      }
+    }
+  };
+
   if (!selectedList) {
     return <div className="inv-panel empty-details-pane" style={{ color: '#6b7280' }}>Select a list</div>;
   }
@@ -89,16 +146,37 @@ const InventoryMiddlePane = () => {
       <div className="flex-between" style={{ marginBottom: '16px' }}>
         <h2 className="section-title" style={{ margin: 0, border: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
           {selectedList.name}
+          {selectedList.isArchived && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#9ca3af', backgroundColor: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px', fontWeight: 'normal' }}>
+              <Archive size={12} /> Archived
+            </span>
+          )}
           <button onClick={toggleFullscreenList} className="inv-btn ghost small" title="Toggle Fullscreen">
             <Maximize2 size={14} />
           </button>
         </h2>
-        <button onClick={() => setIsAdding(!isAdding)} className="inv-btn ghost small">
-          <Plus size={14} /> New
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button 
+            onClick={() => {
+              if (!isSelectionMode) {
+                setIsSelectionMode(true);
+              } else {
+                handleSelectAll();
+              }
+            }} 
+            className={`inv-btn small ${isSelectionMode ? 'secondary' : 'ghost'}`}
+          >
+            <CheckSquare size={14} /> {isSelectionMode ? (selectedInventories.size === listInventories.length && listInventories.length > 0 ? 'Deselect All' : 'Select All') : 'Select'}
+          </button>
+          {!selectedList.isArchived && (
+            <button onClick={() => setIsAdding(!isAdding)} className="inv-btn ghost small">
+              <Plus size={14} /> New
+            </button>
+          )}
+        </div>
       </div>
 
-      {isAdding && (
+      {isAdding && !selectedList.isArchived && (
         <form onSubmit={handleAddInventory} style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
           <input 
             type="text" 
@@ -128,15 +206,30 @@ const InventoryMiddlePane = () => {
             <div 
               key={inv.id}
               onClick={() => {
-                setSelectedInventoryId(inv.id);
-                setIsDetailsCollapsed(false);
-                if (fullscreenPane === 'list') {
-                  setFullscreenPane('inventory');
+                if (isSelectionMode) {
+                  const next = new Set(selectedInventories);
+                  if (next.has(inv.id)) next.delete(inv.id);
+                  else next.add(inv.id);
+                  setSelectedInventories(next);
+                } else {
+                  setSelectedInventoryId(inv.id);
+                  if (fullscreenPane === 'list') {
+                    setFullscreenPane('inventory');
+                  }
                 }
               }}
               className={`inventory-card ${isSelected ? 'selected' : ''}`}
             >
               <div className="card-title">
+                {isSelectionMode && (
+                  <input 
+                    type="checkbox" 
+                    checked={selectedInventories.has(inv.id)}
+                    onChange={(e) => toggleSelection(e, inv.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ marginRight: '8px', cursor: 'pointer' }}
+                  />
+                )}
                 <span>{inv.name}</span>
                 {getStatusBadge(inv)}
               </div>
@@ -153,6 +246,26 @@ const InventoryMiddlePane = () => {
           <div className="empty-state">No inventories found.</div>
         )}
       </div>
+
+      {isSelectionMode && (
+        <BulkActionBar 
+          selectedCount={selectedInventories.size}
+          itemName="inventories"
+          onMove={() => setIsPickerOpen(true)}
+          onCancel={() => { setIsSelectionMode(false); setSelectedInventories(new Set()); }}
+        />
+      )}
+
+      <DestinationPickerModal 
+        isOpen={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        onConfirm={handleBulkMove}
+        invalidTargets={[
+          ...Array.from(selectedInventories).map(id => `inventory:${id}`),
+          `list:${selectedListId}`
+        ]}
+        title="Move Inventories To..."
+      />
     </div>
   );
 };

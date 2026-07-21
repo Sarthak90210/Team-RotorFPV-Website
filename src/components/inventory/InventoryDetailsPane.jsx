@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useInventory } from './InventoryContext';
-import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, onSnapshot, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { logInventoryAction } from '../../lib/inventoryApi';
-import { Maximize2, ChevronsRight, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { Maximize2, MoreVertical, Edit2, Trash2, CheckSquare } from 'lucide-react';
+import BulkActionBar from './BulkActionBar';
+import DestinationPickerModal from './DestinationPickerModal';
 
 const InventoryDetailsPane = () => {
   const { 
     selectedList, 
     selectedInventoryId, 
     selectedInventory, 
-    isDetailsCollapsed, 
-    setIsDetailsCollapsed,
     user,
     usersList,
     usersMap,
@@ -42,6 +42,22 @@ const InventoryDetailsPane = () => {
   const [newSubInvName, setNewSubInvName] = useState('');
   const [isMovingInv, setIsMovingInv] = useState(false);
   const [invTargetId, setInvTargetId] = useState('');
+
+  // Bulk Selection State
+  const [isItemsSelectionMode, setIsItemsSelectionMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState(new Set());
+  const [isSubInvSelectionMode, setIsSubInvSelectionMode] = useState(false);
+  const [selectedSubInvs, setSelectedSubInvs] = useState(new Set());
+  const [isDestinationPickerOpen, setIsDestinationPickerOpen] = useState(false);
+  const [destinationPickerType, setDestinationPickerType] = useState(null); // 'items' or 'subInvs'
+
+  // Clear selections when inventory changes
+  useEffect(() => {
+    setIsItemsSelectionMode(false);
+    setSelectedItems(new Set());
+    setIsSubInvSelectionMode(false);
+    setSelectedSubInvs(new Set());
+  }, [selectedInventoryId]);
 
   // 1. Fetch Items & History live
   useEffect(() => {
@@ -76,7 +92,7 @@ const InventoryDetailsPane = () => {
     return () => { unsubItems(); unsubItemHistory(); unsubHoldHistory(); };
   }, [selectedInventoryId]);
 
-  if (!selectedInventory || isDetailsCollapsed || selectedInventoryId === null) {
+  if (!selectedInventory || selectedInventoryId === null) {
     return null;
   }
 
@@ -281,6 +297,76 @@ const InventoryDetailsPane = () => {
     }
   };
 
+  const handleBulkMoveSubInvs = async (target) => {
+    if (!target || selectedSubInvs.size === 0) return;
+    
+    const isMovingToList = target.type === 'list';
+    const targetListId = isMovingToList ? target.id : inventories.find(i => i.id === target.id)?.listId;
+    const targetParentId = isMovingToList ? null : target.id;
+    
+    if (window.confirm(`Move ${selectedSubInvs.size} sub-inventories to ${target.name}?`)) {
+      try {
+        const batch = writeBatch(db);
+        selectedSubInvs.forEach(invId => {
+          batch.update(doc(db, 'inventories', invId), {
+            listId: targetListId,
+            parentInventoryId: targetParentId
+          });
+        });
+        await batch.commit();
+        await logInventoryAction(`Bulk moved ${selectedSubInvs.size} sub-inventories to ${target.name}`);
+        
+        setIsSubInvSelectionMode(false);
+        setSelectedSubInvs(new Set());
+        setIsDestinationPickerOpen(false);
+      } catch (err) {
+        console.error("Bulk move error:", err);
+        alert("Failed to bulk move sub-inventories");
+      }
+    }
+  };
+
+  const handleBulkMoveItems = async (target) => {
+    if (!target || selectedItems.size === 0) return;
+    
+    if (window.confirm(`Move ${selectedItems.size} items to ${target.name}?`)) {
+      try {
+        const batch = writeBatch(db);
+        const timestamp = new Date().toISOString();
+        
+        selectedItems.forEach(itemId => {
+          const item = items.find(i => i.id === itemId);
+          if (!item) return;
+
+          // Update item
+          batch.update(doc(db, 'items', itemId), { inventoryId: target.id });
+          
+          // Add history
+          const historyRef = doc(collection(db, 'item_history'));
+          batch.set(historyRef, {
+            itemId,
+            inventoryId: target.id,
+            previousInventoryId: selectedInventory.id,
+            itemName: item.name,
+            action: 'moved',
+            userId: user.email,
+            timestamp
+          });
+        });
+        
+        await batch.commit();
+        await logInventoryAction(`Bulk moved ${selectedItems.size} items to ${target.name}.`);
+        
+        setIsItemsSelectionMode(false);
+        setSelectedItems(new Set());
+        setIsDestinationPickerOpen(false);
+      } catch (err) {
+        console.error("Bulk move error:", err);
+        alert("Failed to bulk move items");
+      }
+    }
+  };
+
   const handleQuickAction = async (action) => {
     setShowQuickActions(false);
     if (action === 'delete') {
@@ -355,7 +441,6 @@ const InventoryDetailsPane = () => {
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={toggleFullscreenInventory} className="inv-btn ghost small" title="Toggle Fullscreen"><Maximize2 size={14} /></button>
-          <button onClick={() => setIsDetailsCollapsed(true)} className="inv-btn ghost small"><ChevronsRight size={14} /></button>
         </div>
       </div>
 
@@ -370,11 +455,15 @@ const InventoryDetailsPane = () => {
           </button>
           {showQuickActions && (
             <div className="quick-actions-menu">
-              <button onClick={() => { setActiveTab('Overview'); setShowQuickActions(false); }}>Assign Holder</button>
-              <button onClick={() => { setIsMovingInv(!isMovingInv); setShowQuickActions(false); }}>Move Inventory</button>
-              <button onClick={() => handleQuickAction('markAvailable')}>Mark Available</button>
-              <button onClick={() => handleQuickAction('markMissing')}>Mark Missing</button>
-              <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)', margin: '4px 0' }}></div>
+              {!selectedList.isArchived && (
+                <>
+                  <button onClick={() => { setActiveTab('Overview'); setShowQuickActions(false); }}>Assign Holder</button>
+                  <button onClick={() => { setIsMovingInv(!isMovingInv); setShowQuickActions(false); }}>Move Inventory</button>
+                  <button onClick={() => handleQuickAction('markAvailable')}>Mark Available</button>
+                  <button onClick={() => handleQuickAction('markMissing')}>Mark Missing</button>
+                  <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)', margin: '4px 0' }}></div>
+                </>
+              )}
               <button onClick={() => handleQuickAction('delete')} className="danger">Delete Inventory</button>
             </div>
           )}
@@ -437,20 +526,24 @@ const InventoryDetailsPane = () => {
 
             <div className="details-section">
               <h3 className="section-title">Assign New Holder</h3>
-              <form onSubmit={handleAssignHolder} style={{ display: 'flex', gap: '8px' }}>
-                <select
-                  className="inv-input"
-                  value={newHolderEmail}
-                  onChange={e => setNewHolderEmail(e.target.value)}
-                  required
-                >
-                  <option value="">Select User...</option>
-                  {usersList.map(u => (
-                    <option key={u.email} value={u.email}>{u.name || u.email}</option>
-                  ))}
-                </select>
-                <button type="submit" className="inv-btn secondary">Assign</button>
-              </form>
+              {selectedList.isArchived ? (
+                <div style={{ color: '#9ca3af', fontSize: '13px' }}>List is archived. Restore to assign a holder.</div>
+              ) : (
+                <form onSubmit={handleAssignHolder} style={{ display: 'flex', gap: '8px' }}>
+                  <select
+                    className="inv-input"
+                    value={newHolderEmail}
+                    onChange={e => setNewHolderEmail(e.target.value)}
+                    required
+                  >
+                    <option value="">Select User...</option>
+                    {usersList.map(u => (
+                      <option key={u.email} value={u.email}>{u.name || u.email}</option>
+                    ))}
+                  </select>
+                  <button type="submit" className="inv-btn secondary">Assign</button>
+                </form>
+              )}
             </div>
 
             <div className="details-section">
@@ -470,27 +563,74 @@ const InventoryDetailsPane = () => {
 
         {activeTab === 'Sub-Inventories' && (
           <div>
-            <form onSubmit={handleAddSubInventory} style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-              <input 
-                type="text" 
-                className="inv-input"
-                value={newSubInvName}
-                onChange={e => setNewSubInvName(e.target.value)}
-                placeholder="Add sub-inventory..."
-                required
-                style={{ flex: 1 }}
-              />
-              <button type="submit" className="inv-btn secondary">Create</button>
-            </form>
+            <div className="flex-between" style={{ marginBottom: '24px', alignItems: 'flex-start' }}>
+              {!selectedList.isArchived ? (
+                <form onSubmit={handleAddSubInventory} style={{ display: 'flex', gap: '8px', flex: 1, marginRight: '16px' }}>
+                  <input 
+                    type="text" 
+                    className="inv-input"
+                    value={newSubInvName}
+                    onChange={e => setNewSubInvName(e.target.value)}
+                    placeholder="Add sub-inventory..."
+                    required
+                    style={{ flex: 1 }}
+                  />
+                  <button type="submit" className="inv-btn secondary">Create</button>
+                </form>
+              ) : (
+                <div style={{ flex: 1 }}></div>
+              )}
+              <button 
+                onClick={() => {
+                  if (!isSubInvSelectionMode) {
+                    setIsSubInvSelectionMode(true);
+                  } else {
+                    const childInvs = inventories.filter(i => i.parentInventoryId === selectedInventory.id);
+                    if (selectedSubInvs.size === childInvs.length) {
+                      setSelectedSubInvs(new Set());
+                    } else {
+                      setSelectedSubInvs(new Set(childInvs.map(i => i.id)));
+                    }
+                  }
+                }} 
+                className={`inv-btn small ${isSubInvSelectionMode ? 'secondary' : 'ghost'}`}
+              >
+                <CheckSquare size={14} /> {isSubInvSelectionMode ? (selectedSubInvs.size === inventories.filter(i => i.parentInventoryId === selectedInventory.id).length && selectedSubInvs.size > 0 ? 'Deselect All' : 'Select All') : 'Select'}
+              </button>
+            </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {inventories.filter(i => i.parentInventoryId === selectedInventory.id).map(inv => (
                 <div 
                   key={inv.id}
-                  onClick={() => setSelectedInventoryId(inv.id)}
+                  onClick={() => {
+                    if (isSubInvSelectionMode) {
+                      const next = new Set(selectedSubInvs);
+                      if (next.has(inv.id)) next.delete(inv.id);
+                      else next.add(inv.id);
+                      setSelectedSubInvs(next);
+                    } else {
+                      setSelectedInventoryId(inv.id);
+                    }
+                  }}
                   className="inventory-card"
                 >
                   <div className="card-title">
+                    {isSubInvSelectionMode && (
+                      <input 
+                        type="checkbox" 
+                        checked={selectedSubInvs.has(inv.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const next = new Set(selectedSubInvs);
+                          if (next.has(inv.id)) next.delete(inv.id);
+                          else next.add(inv.id);
+                          setSelectedSubInvs(next);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ marginRight: '8px', cursor: 'pointer' }}
+                      />
+                    )}
                     <span>{inv.name}</span>
                   </div>
                 </div>
@@ -499,36 +639,85 @@ const InventoryDetailsPane = () => {
                 <div className="empty-state">No sub-inventories.</div>
               )}
             </div>
+            
+            {isSubInvSelectionMode && (
+              <BulkActionBar 
+                selectedCount={selectedSubInvs.size}
+                itemName="sub-inventories"
+                onMove={() => { setDestinationPickerType('subInvs'); setIsDestinationPickerOpen(true); }}
+                onCancel={() => { setIsSubInvSelectionMode(false); setSelectedSubInvs(new Set()); }}
+              />
+            )}
           </div>
         )}
 
         {activeTab === 'Items' && (
           <div>
-            <form onSubmit={handleAddItem} style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-              <input 
-                type="text" 
-                className="inv-input"
-                value={newItemName}
-                onChange={e => setNewItemName(e.target.value)}
-                placeholder="Add new item..."
-                required
-                style={{ flex: 2 }}
-              />
-              <input 
-                type="number" 
-                className="inv-input"
-                value={newItemQty}
-                onChange={e => setNewItemQty(e.target.value)}
-                min="1"
-                required
-                style={{ flex: 1 }}
-              />
-              <button type="submit" className="inv-btn secondary">Add</button>
-            </form>
+            <div className="flex-between" style={{ marginBottom: '24px', alignItems: 'flex-start' }}>
+              {!selectedList.isArchived ? (
+                <form onSubmit={handleAddItem} style={{ display: 'flex', gap: '8px', flex: 1, marginRight: '16px' }}>
+                  <input 
+                    type="text" 
+                    className="inv-input"
+                    value={newItemName}
+                    onChange={e => setNewItemName(e.target.value)}
+                    placeholder="Add new item..."
+                    required
+                    style={{ flex: 2 }}
+                  />
+                  <input 
+                    type="number" 
+                    className="inv-input"
+                    value={newItemQty}
+                    onChange={e => setNewItemQty(e.target.value)}
+                    min="1"
+                    required
+                    style={{ flex: 1 }}
+                  />
+                  <button type="submit" className="inv-btn secondary">Add</button>
+                </form>
+              ) : (
+                <div style={{ flex: 1 }}></div>
+              )}
+              <button 
+                onClick={() => {
+                  if (!isItemsSelectionMode) {
+                    setIsItemsSelectionMode(true);
+                  } else {
+                    if (selectedItems.size === items.length) {
+                      setSelectedItems(new Set());
+                    } else {
+                      setSelectedItems(new Set(items.map(i => i.id)));
+                    }
+                  }
+                }} 
+                className={`inv-btn small ${isItemsSelectionMode ? 'secondary' : 'ghost'}`}
+              >
+                <CheckSquare size={14} /> {isItemsSelectionMode ? (selectedItems.size === items.length && items.length > 0 ? 'Deselect All' : 'Select All') : 'Select'}
+              </button>
+            </div>
 
             <table className="inv-table">
               <thead>
                 <tr>
+                  {isItemsSelectionMode && (
+                    <th style={{ width: '40px', textAlign: 'center' }}>
+                      <input 
+                        type="checkbox"
+                        checked={items.length > 0 && selectedItems.size === items.length}
+                        ref={el => {
+                          if (el) {
+                            el.indeterminate = selectedItems.size > 0 && selectedItems.size < items.length;
+                          }
+                        }}
+                        onChange={() => {
+                          if (selectedItems.size === items.length) setSelectedItems(new Set());
+                          else setSelectedItems(new Set(items.map(i => i.id)));
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
+                  )}
                   <th>Name</th>
                   <th style={{ width: '80px' }}>Qty</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
@@ -536,7 +725,28 @@ const InventoryDetailsPane = () => {
               </thead>
               <tbody>
                 {items.map(item => (
-                  <tr key={item.id}>
+                  <tr 
+                    key={item.id} 
+                    onClick={() => {
+                      if (isItemsSelectionMode) {
+                        const next = new Set(selectedItems);
+                        if (next.has(item.id)) next.delete(item.id);
+                        else next.add(item.id);
+                        setSelectedItems(next);
+                      }
+                    }}
+                    style={{ cursor: isItemsSelectionMode ? 'pointer' : 'default' }}
+                  >
+                    {isItemsSelectionMode && (
+                      <td style={{ textAlign: 'center' }}>
+                        <input 
+                          type="checkbox"
+                          checked={selectedItems.has(item.id)}
+                          onChange={() => {}}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </td>
+                    )}
                     <td>
                       {editingItemId === item.id ? (
                         <input
@@ -599,6 +809,15 @@ const InventoryDetailsPane = () => {
               </tbody>
             </table>
             {items.length === 0 && <div className="empty-state">No items.</div>}
+
+            {isItemsSelectionMode && (
+              <BulkActionBar 
+                selectedCount={selectedItems.size}
+                itemName="items"
+                onMove={() => { setDestinationPickerType('items'); setIsDestinationPickerOpen(true); }}
+                onCancel={() => { setIsItemsSelectionMode(false); setSelectedItems(new Set()); }}
+              />
+            )}
           </div>
         )}
 
@@ -702,6 +921,29 @@ const InventoryDetailsPane = () => {
           </div>
         )}
       </div>
+
+      <DestinationPickerModal 
+        isOpen={isDestinationPickerOpen}
+        onClose={() => setIsDestinationPickerOpen(false)}
+        onConfirm={(target) => {
+          if (destinationPickerType === 'items') {
+            handleBulkMoveItems(target);
+          } else if (destinationPickerType === 'subInvs') {
+            handleBulkMoveSubInvs(target);
+          }
+        }}
+        invalidTargets={
+          destinationPickerType === 'subInvs' 
+            ? [...Array.from(selectedSubInvs).map(id => `inventory:${id}`), `inventory:${selectedInventory.id}`]
+            : [`inventory:${selectedInventory.id}`]
+        }
+        allowedTypes={
+          destinationPickerType === 'items'
+            ? ['inventory'] // Items must go to an inventory
+            : ['list', 'inventory'] // Sub-inventories can go to list or inventory
+        }
+        title={destinationPickerType === 'items' ? "Move Items To..." : "Move Sub-Inventories To..."}
+      />
     </div>
   );
 };

@@ -10,6 +10,7 @@ const SpotlightSearch = () => {
     inventories, 
     allItems, 
     usersList,
+    selectedListId,
     setSelectedListId, 
     setSelectedInventoryId,
     getInventoryPath
@@ -36,9 +37,16 @@ const SpotlightSearch = () => {
 
     const q = query.toLowerCase();
     const newResults = [];
+    
+    // O(1) lookup map for archiving status
+    const listArchivedMap = lists.reduce((acc, l) => {
+      acc[l.id] = l.isArchived;
+      return acc;
+    }, {});
 
     // Search Lists
     lists.forEach(l => {
+      if (listArchivedMap[l.id] && selectedListId !== l.id) return;
       if (l.name.toLowerCase().includes(q)) {
         newResults.push({ type: 'list', id: l.id, name: l.name, subtext: 'Inventory List', targetListId: l.id, targetInvId: null });
       }
@@ -46,6 +54,7 @@ const SpotlightSearch = () => {
 
     // Search Inventories
     inventories.forEach(inv => {
+      if (listArchivedMap[inv.listId] && selectedListId !== inv.listId) return;
       const parentListObj = lists.find(l => l.id === inv.listId);
       if (!parentListObj) return; // Ignore orphaned inventories
 
@@ -64,9 +73,10 @@ const SpotlightSearch = () => {
 
     // Search Items (if loaded)
     allItems.forEach(item => {
-      if (item.name.toLowerCase().includes(q)) {
-        const parentInv = inventories.find(i => i.id === item.inventoryId);
-        if (parentInv) {
+      const parentInv = inventories.find(i => i.id === item.inventoryId);
+      if (parentInv) {
+        if (listArchivedMap[parentInv.listId] && selectedListId !== parentInv.listId) return;
+        if (item.name.toLowerCase().includes(q)) {
           const parentListObj = lists.find(l => l.id === parentInv.listId);
           if (!parentListObj) return; // Ignore items in orphaned inventories
 
@@ -89,6 +99,7 @@ const SpotlightSearch = () => {
         // Find inventories held by this user
         const heldInvs = inventories.filter(i => i.currentHolder === u.email);
         heldInvs.forEach(inv => {
+          if (listArchivedMap[inv.listId] && selectedListId !== inv.listId) return;
           const parentListObj = lists.find(l => l.id === inv.listId);
           if (!parentListObj) return;
 
@@ -108,7 +119,7 @@ const SpotlightSearch = () => {
     // Take top 20 to avoid lag
     setResults(newResults.slice(0, 20));
     setSelectedIndex(0);
-  }, [query, lists, inventories, allItems, usersList]);
+  }, [query, lists, inventories, allItems, usersList, selectedListId]);
 
   const handleSelect = (result) => {
     if (result.targetListId) setSelectedListId(result.targetListId);
