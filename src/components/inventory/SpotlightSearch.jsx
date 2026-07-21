@@ -58,8 +58,11 @@ const SpotlightSearch = () => {
       const parentListObj = lists.find(l => l.id === inv.listId);
       if (!parentListObj) return; // Ignore orphaned inventories
 
+      const path = getInventoryPath(inv.id);
+      if (path.length > 0 && path[0].parentInventoryId) return; // Ignore deep orphaned inventories
+
       if (inv.name.toLowerCase().includes(q) || (inv.currentHolder && inv.currentHolder.toLowerCase().includes(q))) {
-        const pathStr = getInventoryPath(inv.id).map(p => p.name).join(' > ');
+        const pathStr = path.map(p => p.name).join(' > ');
         newResults.push({ 
           type: 'inventory', 
           id: inv.id, 
@@ -80,7 +83,10 @@ const SpotlightSearch = () => {
           const parentListObj = lists.find(l => l.id === parentInv.listId);
           if (!parentListObj) return; // Ignore items in orphaned inventories
 
-          const pathStr = getInventoryPath(parentInv.id).map(p => p.name).join(' > ');
+          const path = getInventoryPath(parentInv.id);
+          if (path.length > 0 && path[0].parentInventoryId) return; // Ignore items in deep orphaned inventories
+
+          const pathStr = path.map(p => p.name).join(' > ');
           newResults.push({
             type: 'item',
             id: item.id,
@@ -103,7 +109,10 @@ const SpotlightSearch = () => {
           const parentListObj = lists.find(l => l.id === inv.listId);
           if (!parentListObj) return;
 
-          const pathStr = getInventoryPath(inv.id).map(p => p.name).join(' > ');
+          const path = getInventoryPath(inv.id);
+          if (path.length > 0 && path[0].parentInventoryId) return;
+
+          const pathStr = path.map(p => p.name).join(' > ');
           newResults.push({
             type: 'user',
             id: `${u.id}-${inv.id}`,
