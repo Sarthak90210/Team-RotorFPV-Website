@@ -4,9 +4,10 @@ import DashboardSummary from './DashboardSummary';
 import { collection, addDoc, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { logInventoryAction } from '../../lib/inventoryApi';
-import { User, Package, Maximize2, Plus, CheckSquare, Archive } from 'lucide-react';
+import { User, Package, Maximize2, Plus, CheckSquare, Archive, Download } from 'lucide-react';
 import BulkActionBar from './BulkActionBar';
 import DestinationPickerModal from './DestinationPickerModal';
+import ExportModal from './ExportModal';
 
 const InventoryMiddlePane = () => {
   const { 
@@ -83,6 +84,8 @@ const InventoryMiddlePane = () => {
         parentInventoryId: null,
         createdAt: new Date().toISOString(),
         createdBy: user.email,
+        updatedAt: new Date().toISOString(),
+        updatedBy: user.email,
         currentHolder: null,
         currentRoom: null,
         currentAssignedDate: null,
@@ -150,12 +153,20 @@ const InventoryMiddlePane = () => {
     }
   };
 
+  const [isExportOpen, setIsExportOpen] = useState(false);
+
   if (!selectedList) {
     return <div className="inv-panel empty-details-pane" style={{ color: '#6b7280' }}>Select a list</div>;
   }
 
   return (
     <div className="inventory-middle inv-panel">
+      <ExportModal 
+        isOpen={isExportOpen} 
+        onClose={() => setIsExportOpen(false)} 
+        currentList={selectedList}
+        currentInventory={null}
+      />
       <div className="flex-between" style={{ marginBottom: '16px' }}>
         <h2 className="section-title" style={{ margin: 0, border: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
           {selectedList.name}
@@ -169,6 +180,13 @@ const InventoryMiddlePane = () => {
           </button>
         </h2>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <button 
+            onClick={() => setIsExportOpen(true)} 
+            className="inv-btn ghost small"
+            title="Export to Excel or CSV"
+          >
+            <Download size={14} /> Export
+          </button>
           <button 
             onClick={() => {
               if (!isSelectionMode) {

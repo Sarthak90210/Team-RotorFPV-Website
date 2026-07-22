@@ -3,6 +3,8 @@ import { db } from '../../firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { FileSpreadsheet, RefreshCw, ExternalLink, CheckCircle2, XCircle, Clock, Save } from 'lucide-react';
 import { triggerGoogleSheetsSync } from '../../lib/googleSheetsSync';
+import { getInventorySnapshot } from '../../lib/inventorySnapshotService';
+import { deleteDoc } from 'firebase/firestore';
 import './GoogleSheetsTab.css';
 
 const GoogleSheetsTab = () => {
@@ -74,9 +76,38 @@ const GoogleSheetsTab = () => {
   const handleManualSync = async () => {
     setTriggering(true);
     try {
-      await triggerGoogleSheetsSync();
+      const res = await triggerGoogleSheetsSync();
+      if (res.success) {
+        alert(`Sync Dispatched Successfully!\n\nMetrics:\n• Total Items Count: ${res.snapshot.summary.totalItems}\n• Total Lists: ${res.snapshot.summary.totalLists}\n• Unique Asset Records: ${res.snapshot.summary.uniqueItemRecords}\n\nCheck your Google Sheet!`);
+      } else {
+        alert(`Sync Failed:\n\n${res.error}`);
+      }
     } catch (error) {
       alert("Failed to trigger sync: " + error.message);
+    } finally {
+      setTriggering(false);
+    }
+  };
+
+  const handleCleanOrphans = async () => {
+    if (!window.confirm("Are you sure you want to permanently delete all orphaned items?")) return;
+    setTriggering(true);
+    try {
+      const snapshot = await getInventorySnapshot();
+      const orphanedItems = snapshot.lists['Unassigned List'] || [];
+      if (orphanedItems.length === 0) {
+        alert("No orphaned items found!");
+        return;
+      }
+      
+      let deleted = 0;
+      for (const item of orphanedItems) {
+        await deleteDoc(doc(db, 'items', item.id));
+        deleted++;
+      }
+      alert(`Successfully deleted ${deleted} orphaned items! Please run Google Sheets sync again.`);
+    } catch (error) {
+      alert("Failed to delete orphans: " + error.message);
     } finally {
       setTriggering(false);
     }
@@ -134,6 +165,15 @@ const GoogleSheetsTab = () => {
             {triggering ? 'Syncing...' : 'Sync Now'}
           </button>
           
+          <button 
+            className="admin-btn secondary" 
+            onClick={handleCleanOrphans}
+            disabled={triggering}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '10px' }}
+          >
+            <XCircle size={16} />
+            Clean Orphans
+          </button>
         </div>
       </div>
       

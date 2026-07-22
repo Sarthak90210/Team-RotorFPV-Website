@@ -3,9 +3,10 @@ import { useInventory } from './InventoryContext';
 import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, onSnapshot, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { logInventoryAction } from '../../lib/inventoryApi';
-import { Maximize2, MoreVertical, Edit2, Trash2, CheckSquare } from 'lucide-react';
+import { Maximize2, MoreVertical, Edit2, Trash2, CheckSquare, Download, Package, User } from 'lucide-react';
 import BulkActionBar from './BulkActionBar';
 import DestinationPickerModal from './DestinationPickerModal';
+import ExportModal from './ExportModal';
 
 const InventoryDetailsPane = () => {
   const { 
@@ -34,6 +35,7 @@ const InventoryDetailsPane = () => {
   const [newItemName, setNewItemName] = useState('');
   
   const [totalItemsCount, setTotalItemsCount] = useState(0);
+  const [subInvCounts, setSubInvCounts] = useState({});
 
   useEffect(() => {
     let isMounted = true;
@@ -54,13 +56,50 @@ const InventoryDetailsPane = () => {
         const chunk = descendantIds.slice(i, i + 10);
         const qItems = query(collection(db, 'items'), where('inventoryId', 'in', chunk));
         const snap = await getDocs(qItems);
-        snap.forEach(d => { total += (d.data().quantity || 1) });
+        snap.forEach(d => { total += (parseInt(d.data().quantity, 10) || 1) });
       }
       if (isMounted) setTotalItemsCount(total);
     };
     fetchTotalItems();
     return () => { isMounted = false; };
   }, [selectedInventoryId, items, inventories]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSubInvCounts = async () => {
+      if (!selectedInventoryId) return;
+      const childInvs = inventories.filter(i => i.parentInventoryId === selectedInventoryId);
+      if (childInvs.length === 0) return;
+
+      const counts = {};
+      const getDescendants = (parentId) => {
+        let ids = [parentId];
+        const children = inventories.filter(i => i.parentInventoryId === parentId);
+        for (const child of children) {
+          ids = ids.concat(getDescendants(child.id));
+        }
+        return ids;
+      };
+
+      const promises = childInvs.map(async (inv) => {
+        const descendantIds = getDescendants(inv.id);
+        let total = 0;
+        for (let i = 0; i < descendantIds.length; i += 10) {
+          const chunk = descendantIds.slice(i, i + 10);
+          const qItems = query(collection(db, 'items'), where('inventoryId', 'in', chunk));
+          const snap = await getDocs(qItems);
+          snap.forEach(d => { total += (parseInt(d.data().quantity, 10) || 1); });
+        }
+        counts[inv.id] = total;
+      });
+
+      await Promise.all(promises);
+      if (isMounted) setSubInvCounts(counts);
+    };
+
+    fetchSubInvCounts();
+    return () => { isMounted = false; };
+  }, [selectedInventoryId, inventories, items]);
   const [newItemQty, setNewItemQty] = useState(1);
   const [editingItemId, setEditingItemId] = useState(null);
   const [editingQty, setEditingQty] = useState(1);
@@ -197,7 +236,9 @@ const InventoryDetailsPane = () => {
         currentHolder: newHolderEmail,
         currentRoom: roomNumber,
         currentAssignedDate: now,
-        status: 'CheckedOut'
+        status: 'CheckedOut',
+        updatedAt: now,
+        updatedBy: user?.email || ''
       });
 
       await logInventoryAction(`Assigned holder "${newHolderEmail}" to "${selectedInventory.name}"`);
@@ -211,13 +252,18 @@ const InventoryDetailsPane = () => {
   const handleAddItem = async (e) => {
     e.preventDefault();
     if (!newItemName.trim() || newItemQty < 1) return;
+    const now = new Date().toISOString();
     try {
       const newDoc = await addDoc(collection(db, 'items'), {
         inventoryId: selectedInventory.id,
         name: newItemName.trim(),
         quantity: parseInt(newItemQty, 10),
-        createdAt: new Date().toISOString(),
-        createdBy: user.email
+        createdAt: now,
+        createdBy: user.email,
+        updatedAt: now,
+        updatedBy: user.email,
+        previousUpdatedAt: null,
+        previousUpdatedBy: null
       });
       await addDoc(collection(db, 'item_history'), {
         itemId: newDoc.id,
@@ -226,7 +272,7 @@ const InventoryDetailsPane = () => {
         action: 'created',
         newQuantity: parseInt(newItemQty, 10),
         userId: user.email,
-        timestamp: new Date().toISOString()
+        timestamp: now
       });
       await logInventoryAction(`Added item "${newItemName.trim()}" (Qty: ${newItemQty}) to "${selectedInventory.name}"`);
       setNewItemName('');
@@ -242,8 +288,16 @@ const InventoryDetailsPane = () => {
     const newName = editingName.trim();
     if (!newName) return;
     if (newQty === item.quantity && newName === item.name) { setEditingItemId(null); return; }
+    const now = new Date().toISOString();
     try {
-      await updateDoc(doc(db, 'items', item.id), { quantity: newQty, name: newName });
+      await updateDoc(doc(db, 'items', item.id), { 
+        quantity: newQty, 
+        name: newName,
+        previousUpdatedAt: item.updatedAt || item.createdAt || null,
+        previousUpdatedBy: item.updatedBy || item.createdBy || null,
+        updatedAt: now,
+        updatedBy: user.email
+      });
       if (newQty !== item.quantity) {
         await addDoc(collection(db, 'item_history'), {
           itemId: item.id,
@@ -253,7 +307,7 @@ const InventoryDetailsPane = () => {
           previousQuantity: item.quantity,
           newQuantity: newQty,
           userId: user.email,
-          timestamp: new Date().toISOString()
+          timestamp: now
         });
       }
       if (newName !== item.name) {
@@ -265,7 +319,7 @@ const InventoryDetailsPane = () => {
           previousName: item.name,
           newName: newName,
           userId: user.email,
-          timestamp: new Date().toISOString()
+          timestamp: now
         });
       }
       await logInventoryAction(`Updated item: "${item.name}" (Now "${newName}", Qty: ${newQty})`);
@@ -290,17 +344,27 @@ const InventoryDetailsPane = () => {
     if (!target || !pickerConfig.payload) return;
     const { id: itemId, name: itemName } = pickerConfig.payload;
     if (target.id === selectedInventory.id) return;
+    const now = new Date().toISOString();
+    const item = items.find(i => i.id === itemId);
 
     try {
-      await updateDoc(doc(db, 'items', itemId), { inventoryId: target.id });
+      await updateDoc(doc(db, 'items', itemId), { 
+        inventoryId: target.id,
+        previousUpdatedAt: item?.updatedAt || item?.createdAt || null,
+        previousUpdatedBy: item?.updatedBy || item?.createdBy || null,
+        updatedAt: now,
+        updatedBy: user.email
+      });
       await addDoc(collection(db, 'item_history'), {
         itemId,
         inventoryId: target.id,
+        inventoryName: target.name,
         previousInventoryId: selectedInventory.id,
+        previousInventoryName: selectedInventory.name,
         itemName,
         action: 'moved',
         userId: user.email,
-        timestamp: new Date().toISOString()
+        timestamp: now
       });
       await logInventoryAction(`Moved item "${itemName}" to ${target.name}.`);
       setPickerConfig({ isOpen: false, type: null, payload: null });
@@ -313,13 +377,16 @@ const InventoryDetailsPane = () => {
   const handleAddSubInventory = async (e) => {
     e.preventDefault();
     if (!newSubInvName.trim()) return;
+    const now = new Date().toISOString();
     try {
       await addDoc(collection(db, 'inventories'), {
         name: newSubInvName.trim(),
         listId: selectedList.id,
         parentInventoryId: selectedInventory.id,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
         createdBy: user.email,
+        updatedAt: now,
+        updatedBy: user.email,
         currentHolder: null,
         currentRoom: null,
         currentAssignedDate: null,
@@ -342,10 +409,15 @@ const InventoryDetailsPane = () => {
       const isMovingToList = target.type === 'list';
       const targetListId = isMovingToList ? target.id : inventories.find(i => i.id === target.id)?.listId;
       const targetParentId = isMovingToList ? null : target.id;
+      const now = new Date().toISOString();
 
       await updateDoc(doc(db, 'inventories', selectedInventory.id), { 
         listId: targetListId,
-        parentInventoryId: targetParentId
+        parentInventoryId: targetParentId,
+        previousUpdatedAt: selectedInventory.updatedAt || selectedInventory.createdAt || null,
+        previousUpdatedBy: selectedInventory.updatedBy || selectedInventory.createdBy || null,
+        updatedAt: now,
+        updatedBy: user.email
       });
       await logInventoryAction(`Moved inventory: ${selectedInventory.name} to ${target.name}`);
       setPickerConfig({ isOpen: false, type: null, payload: null });
@@ -361,6 +433,7 @@ const InventoryDetailsPane = () => {
     const isMovingToList = target.type === 'list';
     const targetListId = isMovingToList ? target.id : inventories.find(i => i.id === target.id)?.listId;
     const targetParentId = isMovingToList ? null : target.id;
+    const now = new Date().toISOString();
     
     if (window.confirm(`Move ${selectedSubInvs.size} sub-inventories to ${target.name}?`)) {
       try {
@@ -371,7 +444,11 @@ const InventoryDetailsPane = () => {
           if (inv && (inv.parentInventoryId !== targetParentId || inv.listId !== targetListId)) {
             batch.update(doc(db, 'inventories', invId), {
               listId: targetListId,
-              parentInventoryId: targetParentId
+              parentInventoryId: targetParentId,
+              previousUpdatedAt: inv.updatedAt || inv.createdAt || null,
+              previousUpdatedBy: inv.updatedBy || inv.createdBy || null,
+              updatedAt: now,
+              updatedBy: user.email
             });
             movedCount++;
           }
@@ -407,14 +484,22 @@ const InventoryDetailsPane = () => {
 
           movedCount++;
           // Update item
-          batch.update(doc(db, 'items', itemId), { inventoryId: target.id });
+          batch.update(doc(db, 'items', itemId), { 
+            inventoryId: target.id,
+            previousUpdatedAt: item.updatedAt || item.createdAt || null,
+            previousUpdatedBy: item.updatedBy || item.createdBy || null,
+            updatedAt: timestamp,
+            updatedBy: user.email
+          });
           
           // Add history
           const historyRef = doc(collection(db, 'item_history'));
           batch.set(historyRef, {
             itemId,
             inventoryId: target.id,
+            inventoryName: target.name,
             previousInventoryId: selectedInventory.id,
+            previousInventoryName: selectedInventory.name,
             itemName: item.name,
             action: 'moved',
             userId: user.email,
@@ -530,8 +615,16 @@ const InventoryDetailsPane = () => {
     }
   };
 
+  const [isExportOpen, setIsExportOpen] = useState(false);
+
   return (
     <div className="inventory-details inv-panel" style={{ position: 'relative' }}>
+      <ExportModal 
+        isOpen={isExportOpen}
+        onClose={() => setIsExportOpen(false)}
+        currentList={selectedList}
+        currentInventory={selectedInventory}
+      />
       
       {/* Header Area */}
       <div className="flex-between" style={{ marginBottom: '8px' }}>
@@ -552,6 +645,13 @@ const InventoryDetailsPane = () => {
           ))}
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <button 
+            onClick={() => setIsExportOpen(true)} 
+            className="inv-btn ghost small"
+            title="Export to Excel or CSV"
+          >
+            <Download size={14} /> Export
+          </button>
           <button onClick={toggleFullscreenInventory} className="inv-btn ghost small" title="Toggle Fullscreen"><Maximize2 size={14} /></button>
         </div>
       </div>
@@ -727,11 +827,14 @@ const InventoryDetailsPane = () => {
                       />
                     )}
                     <span>{inv.name}</span>
+                    <span style={{ marginLeft: 'auto', marginRight: '8px', fontSize: '12px', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Package size={12} /> {subInvCounts[inv.id] || 0} items
+                    </span>
                     {!isSubInvSelectionMode && (
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleDeleteSubInv(inv); }}
                         className="inv-btn ghost small"
-                        style={{ marginLeft: 'auto', color: '#ef4444', padding: '4px' }}
+                        style={{ color: '#ef4444', padding: '4px' }}
                         title="Delete Sub-Inventory"
                       >
                         <Trash2 size={14} />
@@ -978,6 +1081,16 @@ const InventoryDetailsPane = () => {
                     );
                   }
                   
+                  const resolveInventoryName = (invId, storedName) => {
+                    if (storedName) return storedName;
+                    if (!invId) return 'Unknown Inventory';
+                    const foundInv = inventories.find(i => i.id === invId);
+                    if (foundInv) return foundInv.name;
+                    const foundList = lists.find(l => l.id === invId);
+                    if (foundList) return foundList.name;
+                    return invId;
+                  };
+
                   let title = 'Item Modified';
                   if (hist.action === 'quantity_changed') title = 'Quantity Edited';
                   else if (hist.action === 'moved') title = 'Item Moved';
@@ -995,7 +1108,9 @@ const InventoryDetailsPane = () => {
                           <div style={{ marginTop: '4px', color: '#9ca3af' }}>{hist.itemName}: {hist.previousQuantity} ➔ {hist.newQuantity}</div>
                         )}
                         {hist.action === 'moved' && (
-                          <div style={{ marginTop: '4px', color: '#9ca3af' }}>{hist.itemName} moved from {hist.previousInventoryId}</div>
+                          <div style={{ marginTop: '4px', color: '#9ca3af' }}>
+                            {hist.itemName} moved from <strong>"{resolveInventoryName(hist.previousInventoryId, hist.previousInventoryName)}"</strong> to <strong>"{resolveInventoryName(hist.inventoryId, hist.inventoryName)}"</strong>
+                          </div>
                         )}
                         {hist.action === 'created' && (
                           <div style={{ marginTop: '4px', color: '#9ca3af' }}>{hist.itemName} added (Qty: {hist.newQuantity})</div>
