@@ -200,8 +200,9 @@
 /* Tables */
 .inv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .inv-table th { text-align: left; padding: 10px 8px; color: #9ca3af; font-weight: 500; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.inv-table td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.02); color: #d1d5db; }
+.inv-table td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.02); color: #d1d5db; transition: background-color 0.3s ease; }
 .inv-table tr:hover td { background: rgba(255,255,255,0.02); }
+.inv-table tr.highlighted-item td { background: rgba(100, 255, 218, 0.15) !important; }
 
 /* History Timeline */
 .history-item {

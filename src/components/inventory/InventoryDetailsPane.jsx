@@ -19,7 +19,9 @@ const InventoryDetailsPane = () => {
     lists,
     toggleFullscreenInventory,
     getInventoryPath,
-    setSelectedInventoryId
+    setSelectedInventoryId,
+    highlightedItemId,
+    setHighlightedItemId
   } = useInventory();
 
   const [activeTab, setActiveTab] = useState('Overview');
@@ -30,26 +32,54 @@ const InventoryDetailsPane = () => {
   
   // Forms state
   const [newItemName, setNewItemName] = useState('');
+  
+  const [totalItemsCount, setTotalItemsCount] = useState(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchTotalItems = async () => {
+      if (!selectedInventoryId) return;
+      const getDescendants = (parentId) => {
+        let ids = [parentId];
+        const children = inventories.filter(i => i.parentInventoryId === parentId);
+        for (const child of children) {
+          ids = ids.concat(getDescendants(child.id));
+        }
+        return ids;
+      };
+
+      const descendantIds = getDescendants(selectedInventoryId);
+      let total = 0;
+      for (let i = 0; i < descendantIds.length; i += 10) {
+        const chunk = descendantIds.slice(i, i + 10);
+        const qItems = query(collection(db, 'items'), where('inventoryId', 'in', chunk));
+        const snap = await getDocs(qItems);
+        snap.forEach(d => { total += (d.data().quantity || 1) });
+      }
+      if (isMounted) setTotalItemsCount(total);
+    };
+    fetchTotalItems();
+    return () => { isMounted = false; };
+  }, [selectedInventoryId, items, inventories]);
   const [newItemQty, setNewItemQty] = useState(1);
   const [editingItemId, setEditingItemId] = useState(null);
   const [editingQty, setEditingQty] = useState(1);
   const [editingName, setEditingName] = useState('');
   const [newHolderEmail, setNewHolderEmail] = useState('');
 
-  // Moving and Sub-inventories state
-  const [movingItemId, setMovingItemId] = useState(null);
-  const [targetInventoryId, setTargetInventoryId] = useState('');
+  // Moving state
+  const [pickerConfig, setPickerConfig] = useState({
+    isOpen: false,
+    type: null, // 'bulkItems', 'bulkSubInvs', 'singleItem', 'singleInv'
+    payload: null
+  });
   const [newSubInvName, setNewSubInvName] = useState('');
-  const [isMovingInv, setIsMovingInv] = useState(false);
-  const [invTargetId, setInvTargetId] = useState('');
 
   // Bulk Selection State
   const [isItemsSelectionMode, setIsItemsSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isSubInvSelectionMode, setIsSubInvSelectionMode] = useState(false);
   const [selectedSubInvs, setSelectedSubInvs] = useState(new Set());
-  const [isDestinationPickerOpen, setIsDestinationPickerOpen] = useState(false);
-  const [destinationPickerType, setDestinationPickerType] = useState(null); // 'items' or 'subInvs'
 
   // Clear selections when inventory changes
   useEffect(() => {
@@ -58,6 +88,30 @@ const InventoryDetailsPane = () => {
     setIsSubInvSelectionMode(false);
     setSelectedSubInvs(new Set());
   }, [selectedInventoryId]);
+
+  // Handle highlighting from Spotlight Search
+  useEffect(() => {
+    if (highlightedItemId) {
+      setActiveTab('Items');
+    }
+  }, [highlightedItemId]);
+
+  useEffect(() => {
+    if (activeTab === 'Items' && highlightedItemId && items.length > 0) {
+      const el = document.getElementById(`item-${highlightedItemId}`);
+      if (el) {
+        // slight delay to ensure render is complete
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+        // Clear highlight after 3 seconds
+        const timer = setTimeout(() => {
+          setHighlightedItemId(null);
+        }, 3000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [activeTab, highlightedItemId, items, setHighlightedItemId]);
 
   // 1. Fetch Items & History live
   useEffect(() => {
@@ -232,25 +286,24 @@ const InventoryDetailsPane = () => {
     }
   };
 
-  const handleMoveItem = async (itemId, itemName) => {
-    if (!targetInventoryId || targetInventoryId === selectedInventory.id) {
-      setMovingItemId(null);
-      return;
-    }
+  const handleSingleMoveItem = async (target) => {
+    if (!target || !pickerConfig.payload) return;
+    const { id: itemId, name: itemName } = pickerConfig.payload;
+    if (target.id === selectedInventory.id) return;
+
     try {
-      await updateDoc(doc(db, 'items', itemId), { inventoryId: targetInventoryId });
+      await updateDoc(doc(db, 'items', itemId), { inventoryId: target.id });
       await addDoc(collection(db, 'item_history'), {
         itemId,
-        inventoryId: targetInventoryId,
+        inventoryId: target.id,
         previousInventoryId: selectedInventory.id,
         itemName,
         action: 'moved',
         userId: user.email,
         timestamp: new Date().toISOString()
       });
-      await logInventoryAction(`Moved item "${itemName}" to a different inventory.`);
-      setMovingItemId(null);
-      setTargetInventoryId('');
+      await logInventoryAction(`Moved item "${itemName}" to ${target.name}.`);
+      setPickerConfig({ isOpen: false, type: null, payload: null });
     } catch (e) {
       console.error(e);
       alert("Move failed.");
@@ -283,14 +336,19 @@ const InventoryDetailsPane = () => {
     }
   };
 
-  const handleMoveInventory = async () => {
+  const handleSingleMoveInv = async (target) => {
+    if (!target) return;
     try {
+      const isMovingToList = target.type === 'list';
+      const targetListId = isMovingToList ? target.id : inventories.find(i => i.id === target.id)?.listId;
+      const targetParentId = isMovingToList ? null : target.id;
+
       await updateDoc(doc(db, 'inventories', selectedInventory.id), { 
-        parentInventoryId: invTargetId || null 
+        listId: targetListId,
+        parentInventoryId: targetParentId
       });
-      await logInventoryAction(`Moved inventory: ${selectedInventory.name}`);
-      setIsMovingInv(false);
-      setInvTargetId('');
+      await logInventoryAction(`Moved inventory: ${selectedInventory.name} to ${target.name}`);
+      setPickerConfig({ isOpen: false, type: null, payload: null });
     } catch(e) {
       console.error(e);
       alert("Failed to move inventory");
@@ -326,7 +384,7 @@ const InventoryDetailsPane = () => {
         
         setIsSubInvSelectionMode(false);
         setSelectedSubInvs(new Set());
-        setIsDestinationPickerOpen(false);
+        setPickerConfig({ isOpen: false, type: null, payload: null });
       } catch (err) {
         console.error("Bulk move error:", err);
         alert("Failed to bulk move sub-inventories");
@@ -371,7 +429,7 @@ const InventoryDetailsPane = () => {
         
         setIsItemsSelectionMode(false);
         setSelectedItems(new Set());
-        setIsDestinationPickerOpen(false);
+        setPickerConfig({ isOpen: false, type: null, payload: null });
       } catch (err) {
         console.error("Bulk move error:", err);
         alert("Failed to bulk move items");
@@ -512,7 +570,7 @@ const InventoryDetailsPane = () => {
               {!selectedList.isArchived && (
                 <>
                   <button onClick={() => { setActiveTab('Overview'); setShowQuickActions(false); }}>Assign Holder</button>
-                  <button onClick={() => { setIsMovingInv(!isMovingInv); setShowQuickActions(false); }}>Move Inventory</button>
+                  <button onClick={() => { setPickerConfig({ isOpen: true, type: 'singleInv', payload: null }); setShowQuickActions(false); }}>Move Inventory</button>
                   <button onClick={() => handleQuickAction('markAvailable')}>Mark Available</button>
                   <button onClick={() => handleQuickAction('markMissing')}>Mark Missing</button>
                   <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)', margin: '4px 0' }}></div>
@@ -523,23 +581,6 @@ const InventoryDetailsPane = () => {
           )}
         </div>
       </div>
-
-      {isMovingInv && (
-        <div style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '16px' }}>
-          <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#e5e7eb' }}>Move Inventory</h4>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <select className="inv-input" value={invTargetId} onChange={e => setInvTargetId(e.target.value)}>
-              <option value="">(Root level of list)</option>
-              {inventories.filter(i => i.id !== selectedInventory.id && i.listId === selectedList?.id).map(i => {
-                const pathStr = getInventoryPath(i.id).map(p => p.name).join(' > ');
-                return <option key={i.id} value={i.id}>{pathStr}</option>;
-              })}
-            </select>
-            <button className="inv-btn secondary" onClick={handleMoveInventory}>Move</button>
-            <button className="inv-btn ghost" onClick={() => setIsMovingInv(false)}>Cancel</button>
-          </div>
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="inv-tabs">
@@ -608,7 +649,7 @@ const InventoryDetailsPane = () => {
                 <div className="meta-label">Creator</div> 
                 <div className="meta-value">{usersMap[selectedInventory.createdBy] || selectedInventory.createdBy}</div>
                 <div className="meta-label">Total Items</div> 
-                <div className="meta-value">{items.reduce((acc, it) => acc + (it.quantity||1), 0)}</div>
+                <div className="meta-value">{totalItemsCount}</div>
               </div>
             </div>
 
@@ -708,7 +749,7 @@ const InventoryDetailsPane = () => {
               <BulkActionBar 
                 selectedCount={selectedSubInvs.size}
                 itemName="sub-inventories"
-                onMove={() => { setDestinationPickerType('subInvs'); setIsDestinationPickerOpen(true); }}
+                onMove={() => { setPickerConfig({ isOpen: true, type: 'bulkSubInvs', payload: null }); }}
                 onCancel={() => { setIsSubInvSelectionMode(false); setSelectedSubInvs(new Set()); }}
               />
             )}
@@ -791,6 +832,8 @@ const InventoryDetailsPane = () => {
                 {items.map(item => (
                   <tr 
                     key={item.id} 
+                    id={`item-${item.id}`}
+                    className={highlightedItemId === item.id ? 'highlighted-item' : ''}
                     onClick={() => {
                       if (isItemsSelectionMode) {
                         const next = new Set(selectedItems);
@@ -837,25 +880,7 @@ const InventoryDetailsPane = () => {
                       )}
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      {movingItemId === item.id ? (
-                        <div style={{ display: 'inline-flex', gap: '8px', alignItems: 'center' }}>
-                          <select 
-                            className="inv-input"
-                            style={{ width: '120px', padding: '4px 8px' }}
-                            value={targetInventoryId}
-                            onChange={e => setTargetInventoryId(e.target.value)}
-                          >
-                            <option value="">Dest...</option>
-                            {inventories.filter(i => i.id !== selectedInventory.id).map(i => {
-                              const pList = lists.find(l => l.id === i.listId)?.name;
-                              const pathStr = getInventoryPath(i.id).map(p => p.name).join(' > ');
-                              return <option key={i.id} value={i.id}>{pList} &gt; {pathStr}</option>;
-                            })}
-                          </select>
-                          <button onClick={() => handleMoveItem(item.id, item.name)} className="inv-btn secondary small">OK</button>
-                          <button onClick={() => setMovingItemId(null)} className="inv-btn ghost small">✕</button>
-                        </div>
-                      ) : editingItemId === item.id ? (
+                      {editingItemId === item.id ? (
                         <div style={{ display: 'inline-flex', gap: '4px' }}>
                           <button onClick={() => handleSaveItem(item)} className="inv-btn secondary small">Save</button>
                           <button onClick={() => setEditingItemId(null)} className="inv-btn ghost small">✕</button>
@@ -863,7 +888,7 @@ const InventoryDetailsPane = () => {
                       ) : (
                         <div style={{ display: 'inline-flex', gap: '4px' }}>
                           <button onClick={() => { setEditingItemId(item.id); setEditingQty(item.quantity); setEditingName(item.name); }} className="inv-btn ghost small"><Edit2 size={14} /></button>
-                          <button onClick={() => setMovingItemId(item.id)} className="inv-btn ghost small" style={{ fontSize: '11px' }}>MOVE</button>
+                          <button onClick={() => setPickerConfig({ isOpen: true, type: 'singleItem', payload: { id: item.id, name: item.name } })} className="inv-btn ghost small" style={{ fontSize: '11px' }}>MOVE</button>
                           <button onClick={() => handleDeleteItem(item.id, item.name)} className="inv-btn ghost small" style={{ color: '#ef4444' }}><Trash2 size={14} /></button>
                         </div>
                       )}
@@ -878,7 +903,7 @@ const InventoryDetailsPane = () => {
               <BulkActionBar 
                 selectedCount={selectedItems.size}
                 itemName="items"
-                onMove={() => { setDestinationPickerType('items'); setIsDestinationPickerOpen(true); }}
+                onMove={() => { setPickerConfig({ isOpen: true, type: 'bulkItems', payload: null }); }}
                 onCancel={() => { setIsItemsSelectionMode(false); setSelectedItems(new Set()); }}
               />
             )}
@@ -987,26 +1012,37 @@ const InventoryDetailsPane = () => {
       </div>
 
       <DestinationPickerModal 
-        isOpen={isDestinationPickerOpen}
-        onClose={() => setIsDestinationPickerOpen(false)}
+        isOpen={pickerConfig.isOpen}
+        onClose={() => setPickerConfig({ ...pickerConfig, isOpen: false })}
         onConfirm={(target) => {
-          if (destinationPickerType === 'items') {
+          if (pickerConfig.type === 'bulkItems') {
             handleBulkMoveItems(target);
-          } else if (destinationPickerType === 'subInvs') {
+          } else if (pickerConfig.type === 'bulkSubInvs') {
             handleBulkMoveSubInvs(target);
+          } else if (pickerConfig.type === 'singleItem') {
+            handleSingleMoveItem(target);
+          } else if (pickerConfig.type === 'singleInv') {
+            handleSingleMoveInv(target);
           }
         }}
         invalidTargets={
-          destinationPickerType === 'subInvs' 
+          pickerConfig.type === 'bulkSubInvs' 
             ? [...Array.from(selectedSubInvs).map(id => `inventory:${id}`)]
+            : pickerConfig.type === 'singleInv'
+            ? [`inventory:${selectedInventory.id}`]
             : []
         }
         allowedTypes={
-          destinationPickerType === 'items'
+          (pickerConfig.type === 'bulkItems' || pickerConfig.type === 'singleItem')
             ? ['inventory'] // Items must go to an inventory
             : ['list', 'inventory'] // Sub-inventories can go to list or inventory
         }
-        title={destinationPickerType === 'items' ? "Move Items To..." : "Move Sub-Inventories To..."}
+        title={
+          pickerConfig.type === 'bulkItems' ? "Move Items To..." : 
+          pickerConfig.type === 'bulkSubInvs' ? "Move Sub-Inventories To..." :
+          pickerConfig.type === 'singleItem' ? `Move "${pickerConfig.payload?.name}" To...` :
+          "Move Inventory To..."
+        }
       />
     </div>
   );

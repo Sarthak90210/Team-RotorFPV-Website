@@ -43,11 +43,24 @@ const InventoryMiddlePane = () => {
       if (selectedListId === 'dashboard' || listInventories.length === 0) return;
       
       const counts = {};
+      const getDescendants = (parentId) => {
+        let ids = [parentId];
+        const children = inventories.filter(i => i.parentInventoryId === parentId);
+        for (const child of children) {
+          ids = ids.concat(getDescendants(child.id));
+        }
+        return ids;
+      };
+
       const promises = listInventories.map(async (inv) => {
-        const qItems = query(collection(db, 'items'), where('inventoryId', '==', inv.id));
-        const snap = await getDocs(qItems);
+        const descendantIds = getDescendants(inv.id);
         let total = 0;
-        snap.forEach(d => { total += (d.data().quantity || 1) });
+        for (let i = 0; i < descendantIds.length; i += 10) {
+          const chunk = descendantIds.slice(i, i + 10);
+          const qItems = query(collection(db, 'items'), where('inventoryId', 'in', chunk));
+          const snap = await getDocs(qItems);
+          snap.forEach(d => { total += (d.data().quantity || 1) });
+        }
         counts[inv.id] = total;
       });
       
@@ -57,7 +70,7 @@ const InventoryMiddlePane = () => {
     
     fetchCounts();
     return () => { isMounted = false; };
-  }, [listInventories, selectedListId]);
+  }, [listInventories, selectedListId, inventories]);
 
   const handleAddInventory = async (e) => {
     e.preventDefault();

@@ -13,7 +13,8 @@ const SpotlightSearch = () => {
     selectedListId,
     setSelectedListId, 
     setSelectedInventoryId,
-    getInventoryPath
+    getInventoryPath,
+    setHighlightedItemId
   } = useInventory();
 
   const [query, setQuery] = useState('');
@@ -137,6 +138,13 @@ const SpotlightSearch = () => {
     } else {
       setSelectedInventoryId(null);
     }
+
+    if (result.type === 'item') {
+      setHighlightedItemId(result.id);
+    } else {
+      setHighlightedItemId(null);
+    }
+
     setIsSpotlightOpen(false);
   };
 

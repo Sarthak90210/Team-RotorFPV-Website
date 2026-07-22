@@ -12,20 +12,22 @@ import TeamMembersTab from '../components/admin/TeamMembersTab';
 import TrafficTab from '../components/admin/TrafficTab';
 import ContactMessagesAdmin from '../components/ContactMessagesAdmin';
 import LogsTab from '../components/admin/LogsTab';
+import GoogleSheetsTab from '../components/admin/GoogleSheetsTab';
 import PillNav from '../components/PillNav';
 import './Admin.css';
 
 const TABS = [
+  { key: 'gallery', label: 'Gallery' },
+  { key: 'sponsors', label: 'Sponsor Us' },
+  { key: 'drones', label: 'Drones' },
   { key: 'home', label: 'Home Page' },
   { key: 'achievements', label: 'Achievements' },
-  { key: 'gallery', label: 'Gallery' },
   { key: 'team', label: 'Board' },
   { key: 'events', label: 'Events' },
-  { key: 'drones', label: 'Drones' },
-  { key: 'sponsors', label: 'Sponsors' },
+  { key: 'google_sheets', label: 'Google Sheets', superAdminOnly: true },
   { key: 'contact_messages', label: 'Messages' },
   { key: 'traffic', label: 'Traffic' },
-  { key: 'team_members', label: 'Team Members', superAdminOnly: true },
+  { key: 'team_members', label: 'Team', superAdminOnly: true },
   { key: 'logs', label: 'Logs', superAdminOnly: true },
 ];
 
@@ -125,6 +127,7 @@ const Admin = () => {
       case 'events': return <EventsTab user={user} />;
       case 'drones': return <DronesTab user={user} />;
       case 'sponsors': return <SponsorsTab user={user} />;
+      case 'google_sheets': return user.isSuperAdmin ? <GoogleSheetsTab /> : null;
       case 'contact_messages': return <ContactMessagesAdmin />;
       case 'traffic': return <TrafficTab />;
       case 'team_members': return user.isSuperAdmin ? <TeamMembersTab user={user} /> : null;

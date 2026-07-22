@@ -5,6 +5,7 @@ import './Admin.css'; // Reusing the exact same UI styles as the Admin panel
 
 import { InventoryProvider } from '../components/inventory/InventoryContext';
 import InventoryLayout from '../components/inventory/InventoryLayout';
+import OpenSheetButton from '../components/inventory/OpenSheetButton';
 
 const Inventory = () => {
   const [user, setUser] = useState(null);
@@ -93,7 +94,7 @@ const Inventory = () => {
   return (
     <div className="admin-container">
       <div className="admin-header" style={{ paddingBottom: '0', borderBottom: 'none' }}>
-        <div></div> {/* spacer */}
+        <OpenSheetButton />
         <div className="user-info">
           <span className="user-email">{user.email}</span>
           <button onClick={handleLogout} className="admin-btn secondary">Sign Out</button>

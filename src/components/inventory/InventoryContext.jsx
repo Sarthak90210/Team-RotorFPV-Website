@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { useGoogleSheetsSync } from '../../hooks/useGoogleSheetsSync';
 
 const InventoryContext = createContext();
 
@@ -17,11 +18,15 @@ export const InventoryProvider = ({ children, user }) => {
   const [allItems, setAllItems] = useState([]); // For spotlight search
   const [hasFetchedAllItems, setHasFetchedAllItems] = useState(false);
 
+  // Initialize Google Sheets Live Sync monitor
+  useGoogleSheetsSync();
+
   // State
   const [selectedListId, setSelectedListId] = useState('dashboard');
   const [selectedInventoryId, setSelectedInventoryId] = useState(null);
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
   const [fullscreenPane, setFullscreenPane] = useState(null); // 'list' | 'inventory' | null
+  const [highlightedItemId, setHighlightedItemId] = useState(null);
 
   useEffect(() => {
     // 1. Fetch Users
@@ -135,6 +140,9 @@ export const InventoryProvider = ({ children, user }) => {
     
     isSpotlightOpen,
     setIsSpotlightOpen,
+    
+    highlightedItemId,
+    setHighlightedItemId,
     
     fullscreenPane,
     setFullscreenPane,
