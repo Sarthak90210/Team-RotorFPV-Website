@@ -102,10 +102,7 @@ const GoogleSheetsTab = () => {
 
   return (
     <div className="sheets-tab-container">
-      <div className="sheets-header">
-        <h2>Google Sheets Mirror (Apps Script)</h2>
-        <p>Configure a free, one-way sync from Firestore to Google Sheets.</p>
-      </div>
+
 
       <div className="status-card">
         <div className="status-indicator" style={{ color: display.color }}>
