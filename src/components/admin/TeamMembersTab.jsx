@@ -14,22 +14,15 @@ const TeamMembersTab = ({ user }) => {
   const [tags, setTags] = useState([]);
   const [customFields, setCustomFields] = useState([]);
   const [admins, setAdmins] = useState([]); 
+  const [joinRequests, setJoinRequests] = useState([]);
   
   const [editingEmail, setEditingEmail] = useState(null);
   
   const [formData, setFormData] = useState({
-    name: '',
     email: '',
-    roomNumber: '',
-    jobTitle: '',
-    linkedin: '',
-    github: '',
-    image: '',
     tags: [],
     customFields: {}
   });
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = React.useRef(null);
 
   const refreshAdmins = async () => {
     try {
@@ -52,30 +45,29 @@ const TeamMembersTab = ({ user }) => {
       setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
+    const unsubRequests = onSnapshot(query(collection(db, 'join_requests'), where('status', '==', 'pending')), (snap) => {
+      setJoinRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
     refreshAdmins();
 
     return () => {
       unsubFields();
       unsubTags();
       unsubUsers();
+      unsubRequests();
     };
   }, []);
 
   const handleStartAdd = () => {
     setEditingEmail('__new__');
-    setFormData({ name: '', email: '', roomNumber: '', jobTitle: '', linkedin: '', github: '', image: '', tags: [], customFields: {} });
+    setFormData({ email: '', tags: [], customFields: {} });
   };
 
   const handleStartEdit = (usr) => {
     setEditingEmail(usr.email);
     setFormData({
-      name: usr.name || '',
       email: usr.email || '',
-      roomNumber: usr.roomNumber || '',
-      jobTitle: usr.jobTitle || '',
-      linkedin: usr.linkedin || '',
-      github: usr.github || '',
-      image: usr.image || '',
       tags: usr.tags || [],
       customFields: usr.customFields || {}
     });
@@ -94,12 +86,6 @@ const TeamMembersTab = ({ user }) => {
       
       const payload = {
         email,
-        name: formData.name.trim(),
-        roomNumber: formData.roomNumber.trim(),
-        jobTitle: formData.jobTitle?.trim() || '',
-        linkedin: formData.linkedin?.trim() || '',
-        github: formData.github?.trim() || '',
-        image: formData.image?.trim() || '',
         tags: expandTagIds(formData.tags, tags),
         customFields: formData.customFields,
       };
@@ -107,7 +93,14 @@ const TeamMembersTab = ({ user }) => {
       const isNew = editingEmail === '__new__';
       const isEmailChanged = !isNew && email !== editingEmail;
       
-      await setDoc(doc(db, 'users', email), payload, { merge: true });
+      if (isNew) {
+        const res = await apiPost('/api/admin/users/create', payload);
+        if (!res.ok) throw new Error(res.data?.error || "Failed to create user");
+        alert(`User created. A verification email has been sent to ${email}.`);
+      } else {
+        await setDoc(doc(db, 'users', email), payload, { merge: true });
+      }
+
       await syncUserPermissions(email, payload.tags, tags, admins);
       
       if (isEmailChanged) {
@@ -127,11 +120,9 @@ const TeamMembersTab = ({ user }) => {
 
       await refreshAdmins();
       
-      if (isNew) {
-        await logAdminAction('team_member_created', 'system', `Created team member: ${email}`);
-      } else if (isEmailChanged) {
+      if (!isNew && isEmailChanged) {
         await logAdminAction('team_member_updated', 'system', `Changed team member email from ${editingEmail} to ${email}`);
-      } else {
+      } else if (!isNew) {
         await logAdminAction('team_member_updated', 'system', `Updated team member: ${email}`);
       }
 
@@ -166,27 +157,39 @@ const TeamMembersTab = ({ user }) => {
     }
   };
 
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setIsUploading(true);
+  const handleAcceptRequest = async (req) => {
+    if (!window.confirm(`Accept request for ${req.name} (${req.email})?`)) return;
     try {
-      const folder = `users/${formData.email || 'new'}`;
-      const { ok, data: uploadedImage } = await uploadFile(file, folder);
-      if (ok && uploadedImage.secure_url) {
-        setFormData(prev => ({ ...prev, image: uploadedImage.secure_url }));
-      } else {
-        alert(uploadedImage.error || "Upload failed.");
-      }
-    } catch (error) {
-      console.error("Upload error:", error);
-      alert("Error uploading image.");
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      const payload = {
+        requestId: req.id,
+        email: req.email,
+        name: req.name || '',
+        registrationNumber: req.registrationNumber || '',
+        tags: [],
+        customFields: {}
+      };
+      
+      const res = await apiPost('/api/admin/requests/approve', payload);
+      if (!res.ok) throw new Error(res.data?.error || "Failed to accept request");
+      
+      alert("Request accepted. A verification email has been sent to the user.");
+    } catch (err) {
+      console.error("Error accepting request:", err);
+      alert("Failed to accept request.");
     }
   };
+
+  const handleRejectRequest = async (reqId) => {
+    if (!window.confirm("Reject and delete this request?")) return;
+    try {
+      await updateDoc(doc(db, 'join_requests', reqId), { status: 'rejected' });
+    } catch (err) {
+      console.error("Error rejecting request:", err);
+      alert("Failed to reject request.");
+    }
+  };
+
+
 
   const handleTagToggle = (tagId) => {
     setFormData(prev => {
@@ -265,85 +268,12 @@ const TeamMembersTab = ({ user }) => {
                   value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
                   required
-                />
-              </div>
-              <div className="form-group">
-                <label>Name</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Room Number</label>
-                <input
-                  type="text"
-                  value={formData.roomNumber}
-                  onChange={(e) => setFormData({...formData, roomNumber: e.target.value})}
-                  placeholder="e.g. A-102"
+                  disabled={editingEmail !== '__new__'}
+                  style={editingEmail !== '__new__' ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
                 />
               </div>
 
-              <div className="form-group">
-                <label>Job Title / Current Status</label>
-                <input
-                  type="text"
-                  value={formData.jobTitle}
-                  onChange={(e) => setFormData({...formData, jobTitle: e.target.value})}
-                  placeholder="e.g. Software Engineer at Google"
-                />
-              </div>
-
-              <div className="form-row" style={{ display: 'flex', gap: '10px' }}>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label>LinkedIn URL</label>
-                  <input
-                    type="url"
-                    value={formData.linkedin}
-                    onChange={(e) => setFormData({...formData, linkedin: e.target.value})}
-                    placeholder="https://linkedin.com/in/..."
-                  />
-                </div>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label>GitHub URL</label>
-                  <input
-                    type="url"
-                    value={formData.github}
-                    onChange={(e) => setFormData({...formData, github: e.target.value})}
-                    placeholder="https://github.com/..."
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Profile Image</label>
-                <div className="file-upload">
-                  <input
-                    type="file"
-                    accept="image/*,.heic,.heif"
-                    ref={fileInputRef}
-                    onChange={handleImageUpload}
-                    disabled={isUploading}
-                  />
-                  {isUploading && <span className="upload-status">Uploading…</span>}
-                </div>
-                <div className="input-divider">or</div>
-                <input
-                  type="url"
-                  value={formData.image}
-                  onChange={(e) => setFormData({...formData, image: e.target.value})}
-                  placeholder="Paste an image URL directly"
-                />
-                {formData.image && (
-                  <div className="image-preview achievement" style={{ marginTop: '10px' }}>
-                    <img src={formData.image} alt="Profile Preview" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover' }} />
-                  </div>
-                )}
-              </div>
-
-              {customFields.length > 0 && (
+              {editingEmail === '__new__' && customFields.length > 0 && (
                 <>
                   <h3 style={{ fontSize: '0.95rem', margin: '20px 0 10px' }}>Dynamic Fields</h3>
                   {customFields.map(field => (
@@ -389,11 +319,39 @@ const TeamMembersTab = ({ user }) => {
             </form>
           </div>
         ) : (
-          <div className="admin-glass-panel">
-            <h2>Team Members</h2>
-            <p className="panel-desc">Manage your entire team, their tags, and permissions. Assigning Admin/Super Admin tags will automatically sync their backend privileges.</p>
-            <button onClick={handleStartAdd} className="admin-btn primary">Add New Team Member</button>
-          </div>
+          <>
+            <div className="admin-glass-panel">
+              <h2>Team Members</h2>
+              <p className="panel-desc">Manage your entire team, their tags, and permissions. Assigning Admin/Super Admin tags will automatically sync their backend privileges.</p>
+              <button onClick={handleStartAdd} className="admin-btn primary">Add New Team Member</button>
+            </div>
+
+            <div className="admin-glass-panel list-panel" style={{ marginTop: '24px', border: '1px solid rgba(100, 255, 218, 0.4)' }}>
+              <h2 style={{ color: 'var(--accent)' }}>Pending Join Requests ({joinRequests.length})</h2>
+              
+              {joinRequests.length === 0 ? (
+                <p className="empty-state" style={{ padding: '20px' }}>No pending requests.</p>
+              ) : (
+                <div className="achievements-list" style={{ maxHeight: '40vh' }}>
+                  {joinRequests.map(req => (
+                    <div key={req.id} className="admin-achievement-card admin-user-card" style={{ flexDirection: 'column', alignItems: 'flex-start', margin: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                        <div>
+                          <h3 style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>{req.name}</h3>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{req.email}</div>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{req.registrationNumber}</div>
+                        </div>
+                        <div className="card-actions">
+                          <button onClick={() => handleAcceptRequest(req)} className="admin-btn primary small">Accept</button>
+                          <button onClick={() => handleRejectRequest(req.id)} className="admin-btn cancel small">Reject</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
@@ -424,7 +382,9 @@ const TeamMembersTab = ({ user }) => {
           <div className="achievements-list">
             {(() => {
               // Merge users and admins so that existing admins without profiles are visible
-              const mergedMembers = [...users];
+              // Only include users who are fully active (or older users without a status field)
+              const activeUsers = users.filter(u => u.status === 'active' || !u.status);
+              const mergedMembers = [...activeUsers];
               admins.forEach(admin => {
                 if (!mergedMembers.find(u => u.email === admin.email)) {
                   mergedMembers.push({ email: admin.email, name: 'Incomplete Profile', isOrphanedAdmin: true, tags: [] });

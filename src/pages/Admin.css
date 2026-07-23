@@ -1103,20 +1103,7 @@
   cursor: pointer;
 }
 
-/* Video preview block (Home) — replaces inline styles. */
-.video-preview {
-  margin-top: 8px;
-  border-radius: 8px;
-  overflow: hidden;
-}
 
-.video-preview video {
-  width: 100%;
-  max-height: 300px;
-  object-fit: cover;
-  border-radius: 8px;
-  display: block;
-}
 
 /* "Contain" image preview (logos that shouldn't be cropped). */
 .image-preview.contain {

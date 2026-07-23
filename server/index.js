@@ -16,7 +16,8 @@ import { initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import dotenv from 'dotenv';
-import { getClientIp, getPublicIdFromUrl, verifyAdmin, verifySuperAdmin } from './auth.js';
+import { getClientIp, getPublicIdFromUrl, verifyAdmin, verifySuperAdmin, verifyAuth } from './auth.js';
+import { sendVerificationEmail, verifyToken } from './verificationService.js';
 
 dotenv.config();
 
@@ -389,16 +390,23 @@ const uploadLimiter = rateLimit({
   keyGenerator: (req) => ipKeyGenerator(getClientIp(req)),
 });
 
-// ── Image upload endpoint (admin-only, signed Cloudinary upload) ──
-app.post('/api/upload', verifyAdmin, uploadLimiter, upload.single('image'), async (req, res) => {
+// ── Image upload endpoint (authenticated, signed Cloudinary upload) ──
+app.post('/api/upload', verifyAuth, uploadLimiter, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Sanitize the caller-supplied folder (mirrors /api/upload-model) so it
-    // can't manipulate the Cloudinary path (e.g. traversal / unexpected chars).
+    // Sanitize the caller-supplied folder
     const safeFolder = (req.body.folder || '').replace(/[^a-zA-Z0-9/_-]/g, '');
+    
+    // If user is not an admin, they can ONLY upload to users/{their_email}
+    if (!req.user.admin) {
+      if (safeFolder !== `users/${req.user.email.toLowerCase()}`) {
+        return res.status(403).json({ error: 'Forbidden: You can only upload to your own profile folder' });
+      }
+    }
+
     const targetFolder = safeFolder ? `team-rotor/${safeFolder}` : 'team-rotor';
 
     const uploadExt = req.file.originalname ? req.file.originalname.split('.').pop().toLowerCase() : '';
@@ -885,6 +893,235 @@ app.get('/api/logs', verifySuperAdmin, async (req, res) => {
   } catch (error) {
     console.error('Logs fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch logs' });
+  }
+});
+
+// ── Verification & Onboarding Endpoints ──
+
+app.post('/api/admin/requests/approve', verifySuperAdmin, async (req, res) => {
+  try {
+    const { requestId, email, name, registrationNumber, tags, customFields } = req.body;
+    
+    // Update request status to approved_unverified
+    await db.collection('join_requests').doc(requestId).update({ status: 'approved_unverified' });
+
+    // Provision user with status active=false
+    await db.collection('users').doc(email.toLowerCase()).set({
+      email: email.toLowerCase(),
+      name: name || '',
+      registrationNumber: registrationNumber || '',
+      jobTitle: '',
+      linkedin: '',
+      github: '',
+      roomNumber: '',
+      image: '',
+      tags: tags || [],
+      customFields: customFields || {},
+      status: 'approved_unverified',
+      emailVerified: false
+    }, { merge: true });
+
+    // Send verification email
+    await sendVerificationEmail(email, 'onboarding', { tags });
+    
+    // Log action
+    await db.collection('audit_logs').add({
+      action: 'join_request_approved',
+      actor: req.user.email,
+      target: email,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error approving request:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+
+    const userSnap = await db.collection('users').doc(email.toLowerCase()).get();
+    if (!userSnap.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const userData = userSnap.data();
+    if (userData.status !== 'approved_unverified') {
+      return res.status(400).json({ error: 'User is not in an unverified state' });
+    }
+
+    await sendVerificationEmail(email, 'onboarding', { tags: userData.tags || [] });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error resending verification:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/users/create', verifySuperAdmin, async (req, res) => {
+  try {
+    const { email, tags, customFields } = req.body;
+    
+    // Provision user with status active=false
+    await db.collection('users').doc(email.toLowerCase()).set({
+      email: email.toLowerCase(),
+      name: '',
+      jobTitle: '',
+      linkedin: '',
+      github: '',
+      roomNumber: '',
+      image: '',
+      tags: tags || [],
+      customFields: customFields || {},
+      status: 'approved_unverified',
+      emailVerified: false
+    }, { merge: true });
+
+    // Send verification email
+    await sendVerificationEmail(email, 'onboarding', { tags });
+    
+    // Log action
+    await db.collection('audit_logs').add({
+      action: 'team_member_created',
+      actor: req.user.email,
+      target: email,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error creating user:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/migrate/request', verifyAuth, async (req, res) => {
+  try {
+    const { newEmail } = req.body;
+    const oldEmail = req.user.email;
+
+    if (!newEmail || typeof newEmail !== 'string') {
+      return res.status(400).json({ error: 'New email is required' });
+    }
+
+    // Check if new email already exists
+    const snap = await db.collection('users').doc(newEmail.toLowerCase()).get();
+    if (snap.exists) {
+      return res.status(400).json({ error: 'An account with this email already exists' });
+    }
+
+    // Generate token and send email
+    await sendVerificationEmail(newEmail, 'migration', { oldEmail });
+
+    res.json({ success: true, message: 'Verification email sent' });
+  } catch (error) {
+    console.error("Error requesting migration:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/verify', async (req, res) => {
+  const token = req.query.token;
+  if (!token) {
+    return res.status(400).send('Missing token');
+  }
+
+  try {
+    const data = await verifyToken(token);
+    
+    if (data.type === 'onboarding') {
+      // Activate user
+      await db.collection('users').doc(data.email).update({
+        status: 'active',
+        emailVerified: true
+      });
+      return res.send('<div style="font-family: sans-serif; padding: 40px; text-align: center;"><h2 style="color: #2e7d32;">Email Verified Successfully!</h2><p>Your account is now active. You may return to the app and sign in.</p></div>');
+    } 
+    
+    if (data.type === 'migration') {
+      const { oldEmail } = data.metadata;
+      const newEmail = data.email;
+
+      // 1. Fetch old user
+      const oldSnap = await db.collection('users').doc(oldEmail).get();
+      if (!oldSnap.exists) {
+        return res.status(400).send('<div style="font-family: sans-serif; padding: 40px; text-align: center;"><h2 style="color: #d32f2f;">Migration Failed</h2><p>Old account not found or already migrated.</p></div>');
+      }
+      
+      const oldData = oldSnap.data();
+
+      // 2. Set new user
+      const newData = { ...oldData, email: newEmail };
+      await db.collection('users').doc(newEmail).set(newData);
+
+      // 3. Update team_members collection
+      const tmSnap = await db.collection('team_members').where('userId', '==', oldEmail).get();
+      if (!tmSnap.empty) {
+        const batch = db.batch();
+        tmSnap.docs.forEach(doc => {
+          batch.update(doc.ref, { userId: newEmail });
+        });
+        await batch.commit();
+      }
+
+      // 4. Update admin root table if exists
+      const adminSnap = await db.collection('admins').doc(oldEmail).get();
+      let hasAdmin = false;
+      let hasSuperAdmin = false;
+
+      if (adminSnap.exists) {
+        const adminData = adminSnap.data();
+        await db.collection('admins').doc(newEmail).set({ ...adminData, email: newEmail });
+        await db.collection('admins').doc(oldEmail).delete();
+        hasAdmin = true;
+        hasSuperAdmin = adminData.isRoot || adminData.isSuperAdmin || false;
+      }
+
+      // 5. Delete old user
+      await db.collection('users').doc(oldEmail).delete();
+
+      // 6. Migrate Firebase Auth Custom Claims
+      try {
+        let newAuthUser;
+        try {
+          newAuthUser = await getAuth().getUserByEmail(newEmail);
+        } catch (e) {
+          if (e.code === 'auth/user-not-found') {
+            newAuthUser = await getAuth().createUser({ email: newEmail });
+          } else {
+            throw e;
+          }
+        }
+        await getAuth().setCustomUserClaims(newAuthUser.uid, { admin: hasAdmin, superAdmin: hasSuperAdmin });
+
+        try {
+          const oldAuthUser = await getAuth().getUserByEmail(oldEmail);
+          await getAuth().setCustomUserClaims(oldAuthUser.uid, { admin: false, superAdmin: false });
+        } catch (e) {
+          // ignore if old user doesn't exist in auth
+        }
+      } catch (authErr) {
+        console.error("Auth claim migration error:", authErr);
+      }
+
+      // Log
+      await db.collection('audit_logs').add({
+        action: 'email_migrated',
+        actor: oldEmail,
+        target: newEmail,
+        timestamp: new Date().toISOString()
+      });
+
+      return res.send('<div style="font-family: sans-serif; padding: 40px; text-align: center;"><h2 style="color: #2e7d32;">Email Migration Successful!</h2><p>Your account has been securely moved. Please sign in with your new Google account.</p></div>');
+    }
+
+  } catch (error) {
+    console.error("Verification Error:", error);
+    return res.status(400).send(`<div style="font-family: sans-serif; padding: 40px; text-align: center;"><h2 style="color: #d32f2f;">Verification Failed</h2><p>${error.message}</p></div>`);
   }
 });
 

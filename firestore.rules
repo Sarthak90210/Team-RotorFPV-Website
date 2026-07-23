@@ -7,6 +7,11 @@ service cloud.firestore {
           && request.auth.token.admin == true;
     }
 
+    function isSuperAdmin() {
+      return request.auth != null
+          && request.auth.token.superAdmin == true;
+    }
+
     match /achievements/{docId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
@@ -52,15 +57,28 @@ service cloud.firestore {
     }
 
     match /activity_logs/{docId} {
-      allow read, create: if isAdmin();
+      allow read: if isAdmin();
+      allow create: if request.auth != null;
     }
 
     match /audit_logs/{docId} {
       allow read, create: if isAdmin();
     }
 
+    match /join_requests/{docId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
     match /users/{docId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin() || (request.auth != null && request.auth.token.email.lower() == docId);
+      allow create: if request.auth != null && request.auth.token.email.lower() == docId &&
+        (!request.resource.data.keys().hasAny(['tags', 'permissions', 'isActive', 'isArchived']));
+      allow update: if isSuperAdmin() ||
+                    (isAdmin() && request.auth.token.email.lower() != docId) ||
+                    (request.auth != null && request.auth.token.email.lower() == docId &&
+                     !request.resource.data.diff(resource.data).affectedKeys().hasAny(['permissions', 'tags', 'isAdmin', 'isSuperAdmin', 'boardGroup']));
+      allow delete: if isAdmin();
     }
 
     match /tags/{docId} {
@@ -68,7 +86,8 @@ service cloud.firestore {
     }
 
     match /custom_fields/{docId} {
-      allow read, write: if isAdmin();
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     match /inventory_lists/{docId} {

@@ -164,19 +164,7 @@ const HomeSettingsTab = ({ user }) => {
               />
             </div>
 
-            <p className="field-hint stack-md">
-              Preview ({homeVideoUrl ? 'Custom Video' : 'Default Video'}):
-            </p>
-            <div className="video-preview">
-              <video
-                key={homeVideoUrl || '/TRFPV_Assets/Teamvideo.mp4'}
-                src={homeVideoUrl || '/TRFPV_Assets/Teamvideo.mp4'}
-                autoPlay
-                loop
-                muted
-                playsInline
-              />
-            </div>
+
 
             <div className="form-actions">
               <button type="submit" className="admin-btn primary" disabled={isUploading || !homeVideoUrl}>

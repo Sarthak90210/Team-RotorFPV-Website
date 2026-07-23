@@ -58,6 +58,24 @@ export function getPublicIdFromUrl(url) {
   }
 }
 
+// Middleware to verify if the requester is authenticated
+export const verifyAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: No token provided' });
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await getAuth().verifyIdToken(token, true);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error('Token verification error:', error);
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+};
+
 // Middleware to verify if the requester is an admin
 export const verifyAdmin = async (req, res, next) => {
   const authHeader = req.headers.authorization;
