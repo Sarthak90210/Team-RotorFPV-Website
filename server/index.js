@@ -939,7 +939,7 @@ app.post('/api/admin/requests/approve', verifySuperAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/resend-verification', async (req, res) => {
+app.post('/api/resend-verification', contactLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
@@ -999,7 +999,7 @@ app.post('/api/admin/users/create', verifySuperAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/migrate/request', verifyAuth, async (req, res) => {
+app.post('/api/migrate/request', verifyAuth, contactLimiter, async (req, res) => {
   try {
     const { newEmail } = req.body;
     const oldEmail = req.user.email;
@@ -1121,7 +1121,8 @@ app.get('/api/verify', async (req, res) => {
 
   } catch (error) {
     console.error("Verification Error:", error);
-    return res.status(400).send(`<div style="font-family: sans-serif; padding: 40px; text-align: center;"><h2 style="color: #d32f2f;">Verification Failed</h2><p>${error.message}</p></div>`);
+    const safeMsg = (error.message || 'Unknown error').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return res.status(400).send(`<div style="font-family: sans-serif; padding: 40px; text-align: center;"><h2 style="color: #d32f2f;">Verification Failed</h2><p>${safeMsg}</p></div>`);
   }
 });
 

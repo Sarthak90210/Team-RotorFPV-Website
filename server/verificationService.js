@@ -87,12 +87,11 @@ export async function sendVerificationEmail(email, type, metadata = {}) {
 
     if (error) {
       console.error("Resend API Error (Verification Email):", error.message || error);
-      console.warn(`[TEST URL FALLBACK]: ${backendVerifyUrl}`);
-      // Do not throw an error here, so the user flow can still succeed and they can copy the URL from the backend console.
+      throw new Error("Failed to send verification email due to a mail server error.");
     }
   } else {
-    console.warn("RESEND_API_KEY not set! Logging token URL instead of sending email:");
-    console.warn(`[TEST URL]: ${backendVerifyUrl}`);
+    console.error("RESEND_API_KEY not set! Cannot send verification email.");
+    throw new Error("Mail server is not configured.");
   }
 }
 
