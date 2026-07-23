@@ -12,6 +12,11 @@ service cloud.firestore {
           && request.auth.token.superAdmin == true;
     }
 
+    function isInventoryAdmin() {
+      return request.auth != null && 
+        (request.auth.token.admin == true || request.auth.token.superAdmin == true || request.auth.token.inventory == true);
+    }
+
     match /achievements/{docId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
@@ -71,7 +76,7 @@ service cloud.firestore {
     }
 
     match /users/{docId} {
-      allow read: if isAdmin() || (request.auth != null && request.auth.token.email.lower() == docId);
+      allow read: if isAdmin() || isInventoryAdmin() || (request.auth != null && request.auth.token.email.lower() == docId);
       allow create: if request.auth != null && request.auth.token.email.lower() == docId &&
         (!request.resource.data.keys().hasAny(['tags', 'permissions', 'isActive', 'isArchived']));
       allow update: if isSuperAdmin() ||
@@ -91,27 +96,27 @@ service cloud.firestore {
     }
 
     match /inventory_lists/{docId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isInventoryAdmin();
     }
 
     match /inventories/{docId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isInventoryAdmin();
     }
 
     match /items/{docId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isInventoryAdmin();
     }
 
     match /inventory_hold_history/{docId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isInventoryAdmin();
     }
 
     match /item_history/{docId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isInventoryAdmin();
     }
 
     match /inventory_movement_history/{docId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isInventoryAdmin();
     }
 
     // Deny everything else by default.
