@@ -38,7 +38,14 @@ export async function sendVerificationEmail(email, type, metadata = {}) {
 
   // Construct verification URL
   // We use the backend URL for the verification link so it handles it directly
-  const apiUrl = process.env.SERVER_URL || 'http://localhost:3000';
+  // We check multiple common environment variables for auto-detecting the production URL
+  const apiUrl = process.env.SERVER_URL || 
+                 process.env.BACKEND_URL || 
+                 process.env.RENDER_EXTERNAL_URL || 
+                 (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null) || 
+                 (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+                 'http://localhost:3000';
+                 
   const backendVerifyUrl = `${apiUrl}/api/verify?token=${token}`;
 
   let subject = '';
