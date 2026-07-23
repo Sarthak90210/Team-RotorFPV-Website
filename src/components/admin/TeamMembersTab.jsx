@@ -144,16 +144,41 @@ const TeamMembersTab = ({ user }) => {
       return;
     }
 
-    if (!window.confirm(`Delete profile for ${email}? This will completely remove them and their permissions.`)) return;
+    // Check if member is already archived — if so, permanently delete
+    const targetUser = users.find(u => u.email === email);
+    const isAlreadyArchived = targetUser?.isArchived === true;
+
+    if (isAlreadyArchived) {
+      if (!window.confirm(`Permanently delete ${email}? This cannot be undone.`)) return;
+      try {
+        await deleteDoc(doc(db, 'users', email));
+        await syncUserPermissions(email, [], tags, admins);
+        await logAdminAction('team_member_deleted', 'system', `Permanently deleted archived member: ${email}`);
+      } catch (error) {
+        console.error("Error permanently deleting user:", error);
+        alert("Failed to permanently delete user");
+      }
+    } else {
+      if (!window.confirm(`Archive ${email}? This will remove their permissions. You can permanently delete them afterwards.`)) return;
+      try {
+        await syncUserPermissions(email, [], tags, admins);
+        await setDoc(doc(db, 'users', email), { isActive: false, isArchived: true, tags: [] }, { merge: true });
+        await logAdminAction('team_member_archived', 'system', `Archived team member: ${email}`);
+      } catch (error) {
+        console.error("Error archiving user:", error);
+        alert("Failed to archive user");
+      }
+    }
+  };
+
+  const handleRestore = async (email) => {
+    if (!window.confirm(`Restore profile for ${email}?`)) return;
     try {
-      // Instead of hard deleting, we just remove permissions and mark inactive if they might be on a board.
-      // We'll soft-delete by un-tagging and adding an archived flag.
-      await syncUserPermissions(email, [], tags, admins);
-      await setDoc(doc(db, 'users', email), { isActive: false, isArchived: true, tags: [] }, { merge: true });
-      await logAdminAction('team_member_archived', 'system', `Archived team member: ${email}`);
+      await setDoc(doc(db, 'users', email), { isActive: true, isArchived: false }, { merge: true });
+      await logAdminAction('team_member_restored', 'system', `Restored team member: ${email}`);
     } catch (error) {
-      console.error("Error archiving user:", error);
-      alert("Failed to archive user");
+      console.error("Error restoring user:", error);
+      alert("Failed to restore user");
     }
   };
 
@@ -164,9 +189,8 @@ const TeamMembersTab = ({ user }) => {
         requestId: req.id,
         email: req.email,
         name: req.name || '',
-        registrationNumber: req.registrationNumber || '',
         tags: [],
-        customFields: {}
+        customFields: req.customFields || {}
       };
       
       const res = await apiPost('/api/admin/requests/approve', payload);
@@ -275,7 +299,6 @@ const TeamMembersTab = ({ user }) => {
 
               {editingEmail === '__new__' && customFields.length > 0 && (
                 <>
-                  <h3 style={{ fontSize: '0.95rem', margin: '20px 0 10px' }}>Dynamic Fields</h3>
                   {customFields.map(field => (
                     <div className="form-group" key={field.id}>
                       <label>{field.name}</label>
@@ -339,7 +362,14 @@ const TeamMembersTab = ({ user }) => {
                         <div>
                           <h3 style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>{req.name}</h3>
                           <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{req.email}</div>
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{req.registrationNumber}</div>
+                          {req.customFields && Object.entries(req.customFields).map(([fieldId, value]) => {
+                            const fieldName = customFields.find(f => f.id === fieldId)?.name || fieldId;
+                            return (
+                              <div key={fieldId} style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                {fieldName}: {value}
+                              </div>
+                            );
+                          })}
                         </div>
                         <div className="card-actions">
                           <button onClick={() => handleAcceptRequest(req)} className="admin-btn primary small">Accept</button>
@@ -374,6 +404,8 @@ const TeamMembersTab = ({ user }) => {
               }}
             >
               <option value="all">All Members</option>
+              <option value="untagged">Untagged Members</option>
+              <option value="archived">Archived Members</option>
               {tags.filter(t => t.isGroup !== false).map(t => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
@@ -418,34 +450,47 @@ const TeamMembersTab = ({ user }) => {
                       </div>
                     </div>
                     <div className="card-actions">
-                      <button onClick={() => handleStartEdit(usr)} className="admin-btn edit small">Edit</button>
-                      <button onClick={() => handleDelete(usr.email)} className="admin-btn delete small">Delete</button>
+                      {!usr.isArchived && <button onClick={() => handleStartEdit(usr)} className="admin-btn edit small">Edit</button>}
+                      {usr.isArchived ? (
+                        <>
+                          <button onClick={() => handleRestore(usr.email)} className="admin-btn edit small">Restore</button>
+                          <button onClick={() => handleDelete(usr.email)} className="admin-btn delete small" style={{ background: '#ff4d4f', color: '#fff' }}>Permanently Delete</button>
+                        </>
+                      ) : (
+                        <button onClick={() => handleDelete(usr.email)} className="admin-btn delete small">Archive</button>
+                      )}
                     </div>
                   </div>
                 </div>
               );
 
               const groups = [];
-              tags.forEach(tag => {
-                // If filtering by a specific group, skip others
-                if (selectedTagFilter !== 'all' && tag.id !== selectedTagFilter) return;
+              if (selectedTagFilter !== 'untagged' && selectedTagFilter !== 'archived') {
+                tags.forEach(tag => {
+                  // If filtering by a specific group, skip others
+                  if (selectedTagFilter !== 'all' && tag.id !== selectedTagFilter) return;
 
-                const membersInTag = mergedMembers.filter(m => (m.tags || []).includes(tag.id));
-                
-                // Show the group if it has members OR if it was explicitly selected (even if empty)
-                if (membersInTag.length > 0 || selectedTagFilter === tag.id) {
-                  groups.push({ tag, members: membersInTag });
-                }
-              });
+                  const membersInTag = mergedMembers.filter(m => (m.tags || []).includes(tag.id) && !m.isArchived);
+                  
+                  // Show the group if it has members OR if it was explicitly selected (even if empty)
+                  if (membersInTag.length > 0 || selectedTagFilter === tag.id) {
+                    groups.push({ tag, members: membersInTag });
+                  }
+                });
+              }
 
-              // Only show untagged members in "All" view
+              // Only show untagged members in "All" view or "untagged" view
               // A member is untagged if they have no tags, or all their tags are deleted
               const validTagIds = new Set(tags.map(t => t.id));
-              const untaggedMembers = selectedTagFilter === 'all' 
+              const untaggedMembers = (selectedTagFilter === 'all' || selectedTagFilter === 'untagged')
                 ? mergedMembers.filter(m => {
                     const validUserTags = (m.tags || []).filter(tid => validTagIds.has(tid));
-                    return validUserTags.length === 0;
+                    return validUserTags.length === 0 && !m.isArchived;
                   }) 
+                : [];
+
+              const archivedMembers = (selectedTagFilter === 'all' || selectedTagFilter === 'archived')
+                ? mergedMembers.filter(m => m.isArchived)
                 : [];
 
               return (
@@ -472,6 +517,17 @@ const TeamMembersTab = ({ user }) => {
                       </h3>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {untaggedMembers.map(usr => renderMemberCard(usr))}
+                      </div>
+                    </div>
+                  )}
+
+                  {archivedMembers.length > 0 && (
+                    <div key="archived">
+                      <h3 style={{ color: '#ff4d4f', fontSize: '1.1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px', marginBottom: '12px' }}>
+                        Archived Members
+                      </h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {archivedMembers.map(usr => renderMemberCard(usr))}
                       </div>
                     </div>
                   )}

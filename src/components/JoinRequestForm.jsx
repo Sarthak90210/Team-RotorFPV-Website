@@ -1,15 +1,34 @@
-import React, { useState } from 'react';
-import { collection, addDoc } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { collection, addDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const JoinRequestForm = ({ onCancel, onSuccess }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    registrationNumber: ''
+    customFields: {}
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [askOnJoinFields, setAskOnJoinFields] = useState([]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'custom_fields'), where('askOnJoin', '==', true));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setAskOnJoinFields(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleCustomFieldChange = (fieldId, value) => {
+    setFormData(prev => ({
+      ...prev,
+      customFields: {
+        ...prev.customFields,
+        [fieldId]: value
+      }
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -64,16 +83,18 @@ const JoinRequestForm = ({ onCancel, onSuccess }) => {
           />
         </div>
 
-        <div className="form-group">
-          <label>Registration Number</label>
-          <input
-            type="text"
-            required
-            value={formData.registrationNumber}
-            onChange={e => setFormData({ ...formData, registrationNumber: e.target.value })}
-            placeholder="e.g. 21BCE0000"
-          />
-        </div>
+        {askOnJoinFields.map(field => (
+          <div className="form-group" key={field.id}>
+            <label>{field.name}</label>
+            <input
+              type="text"
+              required
+              value={formData.customFields[field.id] || ''}
+              onChange={e => handleCustomFieldChange(field.id, e.target.value)}
+              placeholder={`Your ${field.name}`}
+            />
+          </div>
+        ))}
 
         <div className="form-actions">
           <button type="submit" className="admin-btn primary" disabled={isSubmitting}>

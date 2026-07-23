@@ -6,8 +6,10 @@ import { logAdminAction } from '../../lib/adminApi';
 const CustomFieldsTab = ({ user }) => {
   const [fields, setFields] = useState([]);
   const [newFieldName, setNewFieldName] = useState('');
+  const [newFieldAskOnJoin, setNewFieldAskOnJoin] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
+  const [editingAskOnJoin, setEditingAskOnJoin] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'custom_fields'), orderBy('name', 'asc'));
@@ -22,9 +24,10 @@ const CustomFieldsTab = ({ user }) => {
     if (!newFieldName.trim()) return;
 
     try {
-      await addDoc(collection(db, 'custom_fields'), { name: newFieldName.trim() });
+      await addDoc(collection(db, 'custom_fields'), { name: newFieldName.trim(), askOnJoin: newFieldAskOnJoin });
       await logAdminAction('custom_field_created', 'system', `Created dynamic field: ${newFieldName.trim()}`);
       setNewFieldName('');
+      setNewFieldAskOnJoin(false);
     } catch (error) {
       console.error("Error adding field:", error);
       alert("Failed to add field");
@@ -46,15 +49,17 @@ const CustomFieldsTab = ({ user }) => {
   const handleStartEdit = (field) => {
     setEditingId(field.id);
     setEditingName(field.name);
+    setEditingAskOnJoin(field.askOnJoin || false);
   };
 
   const handleSaveEdit = async (id, oldName) => {
     if (!editingName.trim()) return;
     try {
-      await updateDoc(doc(db, 'custom_fields', id), { name: editingName.trim() });
+      await updateDoc(doc(db, 'custom_fields', id), { name: editingName.trim(), askOnJoin: editingAskOnJoin });
       await logAdminAction('custom_field_updated', 'system', `Renamed field from ${oldName} to ${editingName.trim()}`);
       setEditingId(null);
       setEditingName('');
+      setEditingAskOnJoin(false);
     } catch (error) {
       console.error("Error updating field:", error);
       alert("Failed to update field");
@@ -77,6 +82,16 @@ const CustomFieldsTab = ({ user }) => {
                 placeholder="e.g., Department"
                 required
               />
+            </div>
+            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '15px', marginBottom: '15px' }}>
+              <input
+                type="checkbox"
+                id="askOnJoin"
+                checked={newFieldAskOnJoin}
+                onChange={(e) => setNewFieldAskOnJoin(e.target.checked)}
+                style={{ width: 'auto' }}
+              />
+              <label htmlFor="askOnJoin" style={{ marginBottom: 0 }}>Ask new person on join</label>
             </div>
             <div className="form-actions">
               <button type="submit" className="admin-btn primary">Create Field</button>
@@ -119,14 +134,28 @@ const CustomFieldsTab = ({ user }) => {
               <div key={field.id} className="admin-achievement-card admin-user-card">
                 <div className="card-info">
                   {editingId === field.id ? (
-                    <input 
-                      type="text" 
-                      value={editingName} 
-                      onChange={e => setEditingName(e.target.value)}
-                      style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', background: '#fff', color: '#000' }}
-                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <input 
+                        type="text" 
+                        value={editingName} 
+                        onChange={e => setEditingName(e.target.value)}
+                        style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', background: '#fff', color: '#000' }}
+                      />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={editingAskOnJoin} 
+                          onChange={e => setEditingAskOnJoin(e.target.checked)} 
+                          style={{ width: 'auto' }} 
+                        />
+                        Ask new person on join
+                      </label>
+                    </div>
                   ) : (
-                    <h3>{field.name}</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <h3>{field.name}</h3>
+                      {field.askOnJoin && <span style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(100, 255, 218, 0.1)', borderRadius: '4px', color: 'var(--accent)', width: 'fit-content' }}>Asked on Join</span>}
+                    </div>
                   )}
                 </div>
                 <div className="card-actions">

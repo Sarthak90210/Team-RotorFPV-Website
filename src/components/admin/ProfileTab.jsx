@@ -381,7 +381,6 @@ const ProfileTab = ({ user }) => {
 
             {customFields.length > 0 && (
               <>
-                <h3 style={{ fontSize: '0.95rem', margin: '20px 0 10px' }}>Dynamic Fields</h3>
                 {customFields.map(field => (
                   <div className="form-group" key={field.id}>
                     <label>{field.name}</label>
