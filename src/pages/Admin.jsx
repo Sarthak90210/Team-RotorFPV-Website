@@ -9,9 +9,12 @@ import DronesTab from '../components/admin/DronesTab';
 import AchievementsTab from '../components/admin/AchievementsTab';
 import GalleryTab from '../components/admin/GalleryTab';
 import TeamTab from '../components/admin/TeamTab';
+import SponsorsTab from '../components/admin/SponsorsTab';
+import TeamMembersTab from '../components/admin/TeamMembersTab';
 import TrafficTab from '../components/admin/TrafficTab';
 import ContactMessagesAdmin from '../components/ContactMessagesAdmin';
 import LogsTab from '../components/admin/LogsTab';
+
 import ProfileTab from '../components/admin/ProfileTab';
 import SocialsTab from '../components/admin/SocialsTab';
 import PillNav from '../components/PillNav';
@@ -27,6 +30,7 @@ const TABS = [
   { key: 'team', label: 'Board', adminOnly: true },
   { key: 'events', label: 'Events', adminOnly: true },
   { key: 'socials', label: 'Socials', adminOnly: true },
+
   { key: 'contact_messages', label: 'Messages', adminOnly: true },
   { key: 'traffic', label: 'Traffic', adminOnly: true },
   { key: 'team_members', label: 'Team', superAdminOnly: true },
@@ -272,6 +276,7 @@ const Admin = () => {
       case 'drones': return <DronesTab user={user} />;
       case 'sponsors': return <SponsorsTab user={user} />;
       case 'socials': return <SocialsTab />;
+
       case 'contact_messages': return <ContactMessagesAdmin />;
       case 'traffic': return <TrafficTab />;
       case 'team_members': return user.isSuperAdmin ? <TeamMembersTab user={user} /> : null;
