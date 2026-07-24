@@ -119,6 +119,11 @@ service cloud.firestore {
       allow read, write: if isInventoryAdmin();
     }
 
+    match /social_links/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
     // Deny everything else by default.
     // Any new collection must have explicit rules added above.
     match /{document=**} {
