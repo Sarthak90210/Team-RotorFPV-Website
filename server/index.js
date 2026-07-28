@@ -61,8 +61,15 @@ const allowedOrigins = [
   'http://localhost:5174',
   'https://teamrotorfpv.com',
   'https://www.teamrotorfpv.com',
+  'https://app.teamrotorfpv.com',      // iPhone/internal web app
+  'https://inventory.teamrotorfpv.com', // inventory web app
   process.env.FRONTEND_URL
 ].filter(Boolean);
+
+// Any subdomain of teamrotorfpv.com is trusted (covers future subdomains
+// like admin./app./inventory. without editing this list again).
+const isTrustedSubdomain = (origin) =>
+  /^https:\/\/([a-z0-9-]+\.)*teamrotorfpv\.com$/i.test(origin);
 
 // Vercel preview URLs for THIS project only.
 // Pattern: https://team-rotor-fpv-website-<hash>-<team>.vercel.app
@@ -76,7 +83,7 @@ app.use(cors({
       return callback(null, true);
     }
 
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(origin) || isTrustedSubdomain(origin)) {
       return callback(null, true);
     }
 
@@ -390,6 +397,22 @@ const uploadLimiter = rateLimit({
   keyGenerator: (req) => ipKeyGenerator(getClientIp(req)),
 });
 
+// ── Cloudinary folder naming ──────────────────────────────────────────────
+// Cloudinary folder segments are restricted, so caller-supplied folders are
+// stripped down to [a-zA-Z0-9/_-]. Anything deriving a folder from user data
+// MUST go through these two helpers, on both the client and the server, or the
+// ownership check below compares two differently-normalised strings.
+//
+// Keep in sync with sanitizeFolder()/ownProfileFolder() in the mobile app
+// (App/src/lib/mediaUpload.js).
+const sanitizeFolder = (folder) =>
+  (folder || '').replace(/[^a-zA-Z0-9/_-]/g, '');
+
+// An email's '@' and '.' do not survive sanitisation, so the folder is derived
+// from the sanitised email rather than the raw one.
+const ownProfileFolder = (email) =>
+  `users/${sanitizeFolder((email || '').toLowerCase())}`;
+
 // ── Image upload endpoint (authenticated, signed Cloudinary upload) ──
 app.post('/api/upload', verifyAuth, uploadLimiter, upload.single('image'), async (req, res) => {
   try {
@@ -398,11 +421,18 @@ app.post('/api/upload', verifyAuth, uploadLimiter, upload.single('image'), async
     }
 
     // Sanitize the caller-supplied folder
-    const safeFolder = (req.body.folder || '').replace(/[^a-zA-Z0-9/_-]/g, '');
-    
-    // If user is not an admin, they can ONLY upload to users/{their_email}
+    const safeFolder = sanitizeFolder(req.body.folder);
+
+    // If user is not an admin, they can ONLY upload to their own profile folder.
+    //
+    // Both sides of this comparison must go through sanitizeFolder(). The
+    // sanitizer strips '@' and '.', so comparing the sanitized folder against a
+    // raw email could never match and every non-admin profile-picture upload
+    // was rejected with a 403. Admins skipped the branch entirely, which is why
+    // it went unnoticed.
     if (!req.user.admin) {
-      if (safeFolder !== `users/${req.user.email.toLowerCase()}`) {
+      const ownFolder = ownProfileFolder(req.user.email);
+      if (safeFolder !== ownFolder) {
         return res.status(403).json({ error: 'Forbidden: You can only upload to your own profile folder' });
       }
     }
@@ -905,8 +935,22 @@ app.post('/api/admin/requests/approve', verifySuperAdmin, async (req, res) => {
     // Update request status to approved_unverified
     await db.collection('join_requests').doc(requestId).update({ status: 'approved_unverified' });
 
-    // Provision user with status active=false
-    await db.collection('users').doc(email.toLowerCase()).set({
+    const userRef = db.collection('users').doc(email.toLowerCase());
+    const userDoc = await userRef.get();
+    
+    let statusToSet = 'approved_unverified';
+    let emailVerifiedToSet = false;
+    
+    if (userDoc.exists) {
+      const existingData = userDoc.data();
+      if (existingData.status === 'active' || existingData.emailVerified) {
+        statusToSet = existingData.status || 'active';
+        emailVerifiedToSet = true;
+      }
+    }
+
+    // Provision user with status active=false (unless already active)
+    await userRef.set({
       email: email.toLowerCase(),
       name: name || '',
       registrationNumber: registrationNumber || '',
@@ -917,12 +961,14 @@ app.post('/api/admin/requests/approve', verifySuperAdmin, async (req, res) => {
       image: '',
       tags: tags || [],
       customFields: customFields || {},
-      status: 'approved_unverified',
-      emailVerified: false
+      status: statusToSet,
+      emailVerified: emailVerifiedToSet
     }, { merge: true });
 
-    // Send verification email
-    await sendVerificationEmail(email, 'onboarding', { tags });
+    // Send verification email if not already verified
+    if (!emailVerifiedToSet) {
+      await sendVerificationEmail(email, 'onboarding', { tags });
+    }
     
     // Log action
     await db.collection('audit_logs').add({
@@ -966,8 +1012,15 @@ app.post('/api/admin/users/create', verifySuperAdmin, async (req, res) => {
   try {
     const { email, tags, customFields } = req.body;
     
+    const userRef = db.collection('users').doc(email.toLowerCase());
+    const userDoc = await userRef.get();
+    
+    if (userDoc.exists) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
     // Provision user with status active=false
-    await db.collection('users').doc(email.toLowerCase()).set({
+    await userRef.set({
       email: email.toLowerCase(),
       name: '',
       jobTitle: '',

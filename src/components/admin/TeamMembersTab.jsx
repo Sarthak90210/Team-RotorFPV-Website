@@ -414,9 +414,8 @@ const TeamMembersTab = ({ user }) => {
           <div className="achievements-list">
             {(() => {
               // Merge users and admins so that existing admins without profiles are visible
-              // Only include users who are fully active (or older users without a status field)
-              const activeUsers = users.filter(u => u.status === 'active' || !u.status);
-              const mergedMembers = [...activeUsers];
+              // We now include ALL users (not just active ones) so unverified and archived members can be managed.
+              const mergedMembers = [...users];
               admins.forEach(admin => {
                 if (!mergedMembers.find(u => u.email === admin.email)) {
                   mergedMembers.push({ email: admin.email, name: 'Incomplete Profile', isOrphanedAdmin: true, tags: [] });
@@ -435,6 +434,7 @@ const TeamMembersTab = ({ user }) => {
                         {usr.image && <img src={usr.image} style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} alt="" />}
                         {usr.name || 'Unnamed'} 
                         {usr.isArchived && <span className="role-badge" style={{ background: '#ff4d4f44', color: '#ff4d4f' }}>Archived</span>}
+                        {usr.status === 'approved_unverified' && !usr.isArchived && <span className="role-badge" style={{ background: '#faad1444', color: '#faad14' }}>Unverified</span>}
                       </h3>
                       {usr.isOrphanedAdmin && (
                         <div style={{ fontSize: '0.8rem', color: 'var(--warning, #faad14)', marginTop: '4px' }}>

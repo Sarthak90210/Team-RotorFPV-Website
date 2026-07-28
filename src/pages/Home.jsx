@@ -6,6 +6,33 @@ import ShinyText from '../components/ShinyText';
 import Seo from '../components/Seo';
 import './Home.css';
 
+const DEFAULT_VIDEO = '/TRFPV_Assets/Teamvideo.mp4';
+
+const isMediaUrl = (value) => {
+  if (typeof value !== 'string') return false;
+
+  const normalized = value.trim().toLowerCase();
+  return normalized.includes('res.cloudinary.com')
+    || normalized.includes('/video/upload/')
+    || normalized.endsWith('.mp4')
+    || normalized.endsWith('.webm')
+    || normalized.endsWith('.mov');
+};
+
+const getAboutText = (value, fallback) => {
+  if (typeof value !== 'string') return fallback;
+
+  const text = value.trim();
+  return text && !isMediaUrl(text) ? text : fallback;
+};
+
+const getVideoUrl = (value) => {
+  if (typeof value !== 'string') return DEFAULT_VIDEO;
+
+  const url = value.trim();
+  return url ? url : DEFAULT_VIDEO;
+};
+
 const DEFAULT_ABOUT =
   "Team Rotor FPV is VIT's premier first-person-view drone racing and engineering team. We design, build, and fly high-performance racing drones from the ground up — pushing the limits of aerodynamics, electronics, and control systems. United by a passion for flight, we compete at national and international stages while fostering hands-on technical education for the next generation of engineers.";
 
@@ -21,7 +48,7 @@ const EMPTY_CONTACT_FORM = {
 
 const Home = () => {
   const containerRef = useRef(null);
-  const [videoSrc, setVideoSrc] = useState("/TRFPV_Assets/Teamvideo.mp4");
+  const [videoSrc, setVideoSrc] = useState(DEFAULT_VIDEO);
   const [aboutText, setAboutText] = useState(DEFAULT_ABOUT);
   const [formData, setFormData] = useState(EMPTY_CONTACT_FORM);
   const [status, setStatus] = useState({ loading: false, success: false, error: '' });
@@ -30,10 +57,10 @@ const Home = () => {
     const unsubscribe = onSnapshot(doc(db, 'settings', 'home'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setVideoSrc(data.backgroundVideoUrl || "/TRFPV_Assets/Teamvideo.mp4");
-        setAboutText(data.aboutUs?.trim() ? data.aboutUs : DEFAULT_ABOUT);
+        setVideoSrc(getVideoUrl(data.backgroundVideoUrl));
+        setAboutText(getAboutText(data.aboutUs, DEFAULT_ABOUT));
       } else {
-        setVideoSrc("/TRFPV_Assets/Teamvideo.mp4");
+        setVideoSrc(DEFAULT_VIDEO);
         setAboutText(DEFAULT_ABOUT);
       }
     }, (error) => {
@@ -42,6 +69,10 @@ const Home = () => {
 
     return () => unsubscribe();
   }, []);
+
+  const handleVideoError = () => {
+    if (videoSrc !== DEFAULT_VIDEO) setVideoSrc(DEFAULT_VIDEO);
+  };
 
   // The hero quote fades out as the user scrolls into the page. We drive it with
   // a 0→1 progress var so the actual animation lives in CSS.
@@ -97,9 +128,8 @@ const Home = () => {
       <Seo description="Team RotorFPV is VIT's premier FPV drone racing and engineering team — we design, build, and fly high-performance racing drones and compete nationally and internationally." />
       <div className="home-container" ref={containerRef}>
         <div className="video-background">
-          <video key={videoSrc} autoPlay loop muted playsInline>
-            <source src={videoSrc} type="video/mp4" />
-            Your browser does not support the video tag.
+          <video key={videoSrc} autoPlay loop muted playsInline onError={handleVideoError}>
+            <source src={videoSrc} />
           </video>
           <div className="video-overlay"></div>
         </div>

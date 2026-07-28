@@ -10,6 +10,17 @@ const EMPTY_SETTINGS = {
   updatedBy: ''
 };
 
+const isMediaUrl = (value) => {
+  if (typeof value !== 'string') return false;
+
+  const normalized = value.trim().toLowerCase();
+  return normalized.includes('res.cloudinary.com')
+    || normalized.includes('/video/upload/')
+    || normalized.endsWith('.mp4')
+    || normalized.endsWith('.webm')
+    || normalized.endsWith('.mov');
+};
+
 const HomeSettingsTab = ({ user }) => {
   const [homeSettings, setHomeSettings] = useState(EMPTY_SETTINGS);
   const [homeVideoUrl, setHomeVideoUrl] = useState('');
@@ -21,9 +32,10 @@ const HomeSettingsTab = ({ user }) => {
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'settings', 'home'), (docSnap) => {
       if (docSnap.exists()) {
-        setHomeSettings(docSnap.data());
-        setHomeVideoUrl(docSnap.data().backgroundVideoUrl || '');
-        setAboutUs(docSnap.data().aboutUs || '');
+        const data = docSnap.data();
+        setHomeSettings(data);
+        setHomeVideoUrl(typeof data.backgroundVideoUrl === 'string' ? data.backgroundVideoUrl : '');
+        setAboutUs(typeof data.aboutUs === 'string' && !isMediaUrl(data.aboutUs) ? data.aboutUs : '');
       } else {
         setHomeSettings(EMPTY_SETTINGS);
         setHomeVideoUrl('');
@@ -37,6 +49,11 @@ const HomeSettingsTab = ({ user }) => {
 
   const handleAboutSubmit = async (e) => {
     e.preventDefault();
+    if (isMediaUrl(aboutUs)) {
+      alert('Please enter About Us copy, not a video or Cloudinary URL.');
+      return;
+    }
+
     setIsSavingAbout(true);
     try {
       await setDoc(doc(db, 'settings', 'home'), {
