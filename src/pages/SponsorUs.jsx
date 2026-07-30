@@ -75,21 +75,52 @@ const SponsorUs = () => {
 
   const getDownloadUrl = (url) => {
     if (!url) return "#";
-    
-    // Raw files (PDFs) don't support image transformations, they download by default with the download attribute
-    if (url.includes('/raw/upload/')) {
-      // Force attachment if possible or just use the original URL
-      if (url.includes('cloudinary.com') && !url.includes('fl_attachment')) {
-        return url.replace('/upload/', '/upload/fl_attachment/');
-      }
-      return url;
+
+    // For Cloudinary, force an attachment download AND pin the filename to a
+    // proper *.pdf name via `fl_attachment:<name>`. This sets the server-side
+    // Content-Disposition, so the file keeps its .pdf extension even when the
+    // browser ignores the anchor's `download` attribute (cross-origin URLs).
+    if (url.includes('cloudinary.com') && url.includes('/upload/') && !url.includes('fl_attachment')) {
+      const baseName = getBrochureDownloadName().replace(/\.pdf$/i, '');
+      return url.replace('/upload/', `/upload/fl_attachment:${encodeURIComponent(baseName)}/`);
     }
 
-    // Force download by appending fl_attachment for images/videos
-    if (url.includes('cloudinary.com') && url.includes('/upload/')) {
-      return url.replace('/upload/', '/upload/fl_attachment/');
-    }
     return url;
+  };
+
+  // Cross-origin downloads ignore the anchor's `download` attribute, so the file
+  // would land without a .pdf extension. Fetch the file and download it via a
+  // same-origin blob URL (which DOES honor the filename); fall back to opening
+  // the attachment URL directly if the fetch is blocked.
+  const handleBrochureDownload = async (e) => {
+    e.preventDefault();
+
+    const url = settings?.brochure?.url;
+    if (!url) {
+      alert("Brochure has not been uploaded yet. Please upload it from the Admin Panel.");
+      return;
+    }
+
+    const filename = getBrochureDownloadName();
+    const downloadUrl = getDownloadUrl(url);
+
+    try {
+      const res = await fetch(downloadUrl);
+      if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error('Brochure blob download failed, falling back:', err);
+      // fl_attachment already forces a named download server-side.
+      window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   // The contact form now lives on the home page; go there and scroll to it.
@@ -133,18 +164,13 @@ const SponsorUs = () => {
               <p>{settings?.description || "Partnering with Team Rotor FPV provides a unique platform to engage with a highly passionate community of engineers, innovators, and drone enthusiasts. Your support fuels our journey in pushing the boundaries of FPV technology, competing at international stages, and fostering technical education."}</p>
               
               <div className="hero-actions">
-                <a 
-                  href={getDownloadUrl(settings?.brochure?.url)} 
-                  target={settings?.brochure?.url ? "_blank" : "_self"} 
-                  rel="noreferrer" 
+                <a
+                  href={getDownloadUrl(settings?.brochure?.url)}
+                  target={settings?.brochure?.url ? "_blank" : "_self"}
+                  rel="noreferrer"
                   download={getBrochureDownloadName()}
                   className="brochure-btn"
-                  onClick={(e) => {
-                    if (!settings?.brochure?.url) {
-                      e.preventDefault();
-                      alert("Brochure has not been uploaded yet. Please upload it from the Admin Panel.");
-                    }
-                  }}
+                  onClick={handleBrochureDownload}
                 >
                   Download Brochure
                 </a>

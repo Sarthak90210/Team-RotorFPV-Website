@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { generateContinuousTrack } from './track/TrackGenerator';
@@ -8,6 +8,9 @@ import { CircuitPostProcessing } from './effects/PostProcessing';
 import { useFPVCircuit } from './FPVCircuitProvider';
 import { useFlightProgress, FlightController, setMaxProgress, setTotalTrackLength } from './utils/progress';
 import { OSDOverlay } from './overlay/OSDOverlay';
+import { detectWebGLSupport } from './utils/webglSupport';
+import { FPVErrorBoundary } from './FPVErrorBoundary';
+import { FPVUnsupported } from './FPVUnsupported';
 
 const CircuitScene = ({ progress, continuousTrackData, isMobile, flyToNextGate, autoFly, pauseFlight }) => {
   return (
@@ -48,6 +51,11 @@ export const FPVExperience = () => {
   const { progress, isMobile, flyToNextGate, pauseFlight, autoFly } = useFlightProgress();
   const { yearCircuits } = useFPVCircuit();
 
+  // Bail out to a graceful fallback if the browser can't provide a WebGL context
+  // capable of instanced rendering, rather than letting the renderer throw an
+  // uncaught "ANGLE_instanced_arrays not supported" error and blank the page.
+  const [webglSupported] = useState(() => detectWebGLSupport().supported);
+
   const continuousTrackData = useMemo(() => {
     if (!yearCircuits || yearCircuits.length === 0) return null;
     return generateContinuousTrack(yearCircuits);
@@ -67,24 +75,30 @@ export const FPVExperience = () => {
     return () => setMaxProgress(1.02); // restore default if the track changes/unmounts
   }, [continuousTrackData]);
 
+  if (!webglSupported) {
+    return <FPVUnsupported />;
+  }
+
   return (
     <>
-      <Canvas 
-        camera={{ position: [0, 0, 0], fov: 60, near: 0.1, far: 25000 }}
-        gl={{ antialias: true, powerPreference: "high-performance", toneMappingExposure: 1.0 }}
-        dpr={[1, 2]}
-      >
-        {continuousTrackData && (
-          <CircuitScene 
-            progress={progress} 
-            continuousTrackData={continuousTrackData}
-            isMobile={isMobile}
-            flyToNextGate={flyToNextGate}
-            pauseFlight={pauseFlight}
-            autoFly={autoFly}
-          />
-        )}
-      </Canvas>
+      <FPVErrorBoundary>
+        <Canvas
+          camera={{ position: [0, 0, 0], fov: 60, near: 0.1, far: 25000 }}
+          gl={{ antialias: true, powerPreference: "high-performance", toneMappingExposure: 1.0 }}
+          dpr={[1, 2]}
+        >
+          {continuousTrackData && (
+            <CircuitScene
+              progress={progress}
+              continuousTrackData={continuousTrackData}
+              isMobile={isMobile}
+              flyToNextGate={flyToNextGate}
+              pauseFlight={pauseFlight}
+              autoFly={autoFly}
+            />
+          )}
+        </Canvas>
+      </FPVErrorBoundary>
       <OSDOverlay progress={progress} allIslandsData={continuousTrackData?.allIslandsData || []} />
       
       {isMobile && (
