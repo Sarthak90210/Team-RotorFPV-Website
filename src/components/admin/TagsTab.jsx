@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { logAdminAction } from '../../lib/adminApi';
+import { buildReadableMirrors } from '../../lib/tagGrants';
 
 const TagsTab = ({ user }) => {
   const [tags, setTags] = useState([]);
@@ -81,15 +82,33 @@ const TagsTab = ({ user }) => {
   const handleSaveEdit = async (id, oldName) => {
     if (!editingName.trim()) return;
     try {
-      await updateDoc(doc(db, 'tags', id), { 
-        name: editingName.trim(),
+      const newName = editingName.trim();
+      await updateDoc(doc(db, 'tags', id), {
+        name: newName,
         grantsAdmin: editingGrantsAdmin,
         grantsSuperAdmin: editingGrantsSuperAdmin,
         isGroup: editingIsGroup,
         isExMember: editingIsExMember,
         grantsTags: editingGrantsTags
       });
-      await logAdminAction('tag_updated', 'system', `Updated tag: ${editingName.trim()}`);
+
+      // Keep the human-readable `tagNames` mirror in sync on every user that
+      // carries this tag, so the Firebase console never shows a stale name.
+      if (newName !== oldName) {
+        try {
+          const updatedTags = tags.map(t => (t.id === id ? { ...t, name: newName } : t));
+          const affected = await getDocs(query(collection(db, 'users'), where('tags', 'array-contains', id)));
+          await Promise.all(affected.docs.map(u =>
+            updateDoc(doc(db, 'users', u.id), {
+              tagNames: buildReadableMirrors(u.data().tags || [], updatedTags).tagNames,
+            })
+          ));
+        } catch (mirrorErr) {
+          console.error('Failed to refresh tagNames mirrors after rename:', mirrorErr);
+        }
+      }
+
+      await logAdminAction('tag_updated', 'system', `Updated tag: ${newName}`);
       setEditingId(null);
     } catch (error) {
       console.error("Error updating tag:", error);

@@ -29,6 +29,25 @@ export const getGrantedTagIds = (tag, allTags) => {
   return [...new Set(granted)];
 };
 
+// Build human-readable mirror fields (`tagNames`, `customFieldsReadable`) so the
+// raw Firestore user document is legible in the Firebase console. `tags` is
+// stored as tag document IDs and `customFields` is keyed by custom-field document
+// IDs, both of which look like random strings in the console. These mirrors are
+// for readability only — the app always reads the ID-based `tags`/`customFields`
+// as the source of truth, so a later rename may leave a mirror briefly stale
+// without any functional impact.
+export const buildReadableMirrors = (tagIds, allTags, customFieldsMap, allCustomFields) => {
+  const tagNames = (tagIds || [])
+    .map(id => (allTags || []).find(t => t.id === id)?.name)
+    .filter(Boolean);
+  const customFieldsReadable = {};
+  for (const [fieldId, value] of Object.entries(customFieldsMap || {})) {
+    const name = (allCustomFields || []).find(f => f.id === fieldId)?.name || fieldId;
+    customFieldsReadable[name] = value;
+  }
+  return { tagNames, customFieldsReadable };
+};
+
 // Tags intentionally grant one level only: selected tags grant their direct
 // defaults, but a granted tag does not recursively grant more tags.
 export const expandTagIds = (selectedTagIds, allTags) => {

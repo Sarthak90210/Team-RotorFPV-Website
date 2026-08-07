@@ -124,6 +124,36 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Physical QR asset tags. Gated to inventory admins, consistent with the
+    // inventories/items collections. Enforces the tag lifecycle:
+    //   unassigned -> active (bind, immutable binding) -> retired.
+    // A bound tag can never be re-pointed; tags are retired, never deleted.
+    // This also resolves the offline race: two devices binding the same
+    // unassigned tag → first to reach the server wins, the second fails the
+    // status == 'unassigned' precondition on sync.
+    match /asset_tags/{code} {
+      function isBindTransition() {
+        return resource.data.status == 'unassigned'
+          && request.resource.data.status == 'active'
+          && request.resource.data.entityId != null
+          && (request.resource.data.entityType == 'inventory'
+              || request.resource.data.entityType == 'item');
+      }
+      function isRetireTransition() {
+        return resource.data.status == 'active'
+          && request.resource.data.status == 'retired'
+          && request.resource.data.entityId == resource.data.entityId
+          && request.resource.data.entityType == resource.data.entityType;
+      }
+      allow read: if isInventoryAdmin();
+      allow create: if isInventoryAdmin()
+        && request.resource.data.status == 'unassigned'
+        && request.resource.data.entityId == null
+        && request.resource.data.entityType == null;
+      allow update: if isInventoryAdmin() && (isBindTransition() || isRetireTransition());
+      allow delete: if false;
+    }
+
     // Deny everything else by default.
     // Any new collection must have explicit rules added above.
     match /{document=**} {
