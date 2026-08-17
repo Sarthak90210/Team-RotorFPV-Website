@@ -142,13 +142,21 @@ const Home = () => {
     if (announcement.type === 'ongoing') {
       return {
         ariaLabel: `Ongoing event: ${announcement.event.name}. View event details.`,
-        node: <Link to={`/events?event=${encodeURIComponent(announcement.event.id)}`} className="home-event-ticker-link ongoing"><strong>ONGOING</strong><span>{announcement.event.name}</span><em>View event</em></Link>
+        node: (
+          <Link to={`/events?event=${encodeURIComponent(announcement.event.id)}`} className="home-event-ticker-link ongoing">
+            <strong>ONGOING</strong><span className="home-event-ticker-separator" aria-hidden="true">·</span><span>{announcement.event.name}</span><span className="home-event-ticker-arrow" aria-hidden="true">→</span>
+          </Link>
+        )
       };
     }
 
     return {
       ariaLabel: `${announcement.callToAction.label}: ${announcement.event.name}`,
-      node: <a href={announcement.callToAction.url} target="_blank" rel="noopener noreferrer" className="home-event-ticker-link"><strong>{announcement.callToAction.label.toUpperCase()}</strong><span>{announcement.event.name}</span></a>
+      node: (
+        <a href={announcement.callToAction.url} target="_blank" rel="noopener noreferrer" className="home-event-ticker-link">
+          <span>{announcement.event.name}</span><strong>{announcement.callToAction.label.toUpperCase()}</strong><span className="home-event-ticker-arrow" aria-hidden="true">→</span>
+        </a>
+      )
     };
   }), [events, now]);
 
@@ -167,11 +175,13 @@ const Home = () => {
           <div className="home-event-ticker">
             <LogoLoop
               logos={tickerItems}
-              speed={55}
+              speed={45}
               direction="left"
-              logoHeight={36}
-              gap={38}
+              logoHeight={14}
+              gap={64}
               hoverSpeed={0}
+              fadeOut
+              fadeOutColor="rgba(0, 0, 0, 0.32)"
               ariaLabel="Current Team RotorFPV events"
               renderItem={(item) => item.node}
             />
