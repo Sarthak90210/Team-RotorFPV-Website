@@ -43,6 +43,20 @@ const TeamTab = () => {
     }
   };
 
+  const syncPublicBoardProfile = async (userId, role) => {
+    const user = usersList.find((candidate) => candidate.id === userId);
+    if (!user) return;
+
+    await setDoc(doc(db, 'public_board_profiles', userId), {
+      name: user.name || '',
+      image: user.image || '',
+      role: role || '',
+      linkedin: user.linkedin || '',
+      github: user.github || '',
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  };
+
   useEffect(() => {
     const qTeamYears = query(collection(db, 'team_years'), orderBy('year', 'desc'));
     const unsubYears = onSnapshot(qTeamYears, (snapshot) => {
@@ -524,6 +538,8 @@ const TeamTab = () => {
         await addDoc(collection(db, 'team_members'), dataToSave);
         await logAdminAction('CREATE', 'TeamMember', `Added team member record for ${dataToSave.userId}`);
       }
+
+      await syncPublicBoardProfile(dataToSave.userId, dataToSave.role);
 
       // Automate tags if this board is the Current Board
       // Read the year directly so a member added immediately after creating a

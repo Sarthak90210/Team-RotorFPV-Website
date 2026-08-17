@@ -31,3 +31,9 @@ _Avoid_: Tracker
 
 **Homepage Event Announcement**:
 An item in the Homepage Event Ticker. It either opens an Upcoming Event's Event Call to Action in a new tab or navigates to and highlights an Ongoing Event on the Events page.
+
+## Board
+
+**Public Board Profile**:
+The public identity of a Board member, limited to name, image, Board role, LinkedIn, and GitHub. It is separate from the private User record.
+_Avoid_: User profile, Board user
