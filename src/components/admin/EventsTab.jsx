@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import React, { useEffect, useRef, useState } from 'react';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { uploadFile, deleteCloudinaryImage, moveCloudinaryImage, logAdminAction } from '../../lib/adminApi';
+import useEventNow from '../../hooks/useEventNow';
+import { getEventGroups, isExternalEventUrl, validateEventSchedule } from '../../lib/eventSchedule';
+import { deleteCloudinaryImage, logAdminAction, moveCloudinaryImage, uploadFile } from '../../lib/adminApi';
 
 const EMPTY_EVENT_FORM = {
   name: '',
@@ -9,8 +11,12 @@ const EMPTY_EVENT_FORM = {
   longDescription: '',
   image: '',
   galleryImages: [],
-  status: 'upcoming',
-  order: 0,
+  startDate: '',
+  endDate: '',
+  startTime: '',
+  endTime: '',
+  ctaUrl: '',
+  ctaLabel: 'register',
   isActive: true
 };
 
@@ -22,99 +28,55 @@ const EventsTab = ({ user }) => {
   const [eventFormData, setEventFormData] = useState(EMPTY_EVENT_FORM);
   const eventFileInputRef = useRef(null);
   const galleryFileInputRef = useRef(null);
+  const now = useEventNow();
+  const groups = getEventGroups(events, now, { includeInactive: true });
 
   useEffect(() => {
-    const qEvents = query(collection(db, 'events'), orderBy('order', 'asc'));
-    const unsub = onSnapshot(qEvents, (snapshot) => {
-      setEvents(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    const unsubscribe = onSnapshot(collection(db, 'events'), (snapshot) => {
+      setEvents(snapshot.docs.map((eventDoc) => ({ id: eventDoc.id, ...eventDoc.data() })));
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching events:", error);
+      console.error('Error fetching events:', error);
       setLoading(false);
     });
-    return () => unsub();
+    return () => unsubscribe();
   }, []);
 
-  const handleEventInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setEventFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+  const handleEventInputChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setEventFormData((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  const handleEventImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const eventFolder = () => `events/${eventFormData.name.trim().replace(/\s+/g, '-')}`;
 
+  const uploadImages = async (files, isGallery) => {
     if (!eventFormData.name) {
-      alert("Please enter the event name before uploading its image.");
-      e.target.value = '';
+      alert('Please enter the event name before uploading images.');
       return;
     }
 
     setIsUploading(true);
     try {
-      // Mirror the rest of the app's Cloudinary layout, with an extra
-      // status sub-folder: events/<upcoming|past>/<event-name>
-      const safeName = eventFormData.name.trim().replace(/\s+/g, '-');
-      const folder = `events/${eventFormData.status}/${safeName}`;
-      const { ok, data: uploadedImage } = await uploadFile(file, folder);
-      if (ok && uploadedImage.secure_url) {
-        setEventFormData(prev => ({ ...prev, image: uploadedImage.secure_url }));
-      } else {
-        alert(uploadedImage.error || "Upload failed.");
-      }
-    } catch (error) {
-      console.error("Upload error:", error);
-      alert("Error uploading image.");
-    } finally {
-      setIsUploading(false);
-      if (eventFileInputRef.current) eventFileInputRef.current.value = '';
-    }
-  };
-
-  const handleGalleryUpload = async (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    if (!eventFormData.name) {
-      alert("Please enter the event name before uploading gallery images.");
-      e.target.value = '';
-      return;
-    }
-
-    setIsUploading(true);
-    try {
-      const safeName = eventFormData.name.trim().replace(/\s+/g, '-');
-      const folder = `events/${eventFormData.status}/${safeName}/gallery`;
+      const folder = isGallery ? `${eventFolder()}/gallery` : eventFolder();
       const uploadedUrls = [];
       for (const file of files) {
         const { ok, data } = await uploadFile(file, folder);
-        if (ok && data.secure_url) {
-          uploadedUrls.push(data.secure_url);
-        } else {
-          alert(data.error || `Failed to upload ${file.name}.`);
-        }
+        if (ok && data.secure_url) uploadedUrls.push(data.secure_url);
+        else alert(data.error || `Failed to upload ${file.name}.`);
       }
-      if (uploadedUrls.length > 0) {
-        setEventFormData(prev => ({ ...prev, galleryImages: [...(prev.galleryImages || []), ...uploadedUrls] }));
+      if (isGallery) {
+        setEventFormData((current) => ({ ...current, galleryImages: [...current.galleryImages, ...uploadedUrls] }));
+      } else if (uploadedUrls[0]) {
+        setEventFormData((current) => ({ ...current, image: uploadedUrls[0] }));
       }
     } catch (error) {
-      console.error("Gallery upload error:", error);
-      alert("Error uploading gallery images.");
+      console.error('Upload error:', error);
+      alert('Error uploading image.');
     } finally {
       setIsUploading(false);
+      if (eventFileInputRef.current) eventFileInputRef.current.value = '';
       if (galleryFileInputRef.current) galleryFileInputRef.current.value = '';
     }
-  };
-
-  const handleRemoveGalleryImage = async (url) => {
-    setEventFormData(prev => ({
-      ...prev,
-      galleryImages: (prev.galleryImages || []).filter(u => u !== url)
-    }));
-    await deleteCloudinaryImage(url);
   };
 
   const resetEventForm = () => {
@@ -122,73 +84,80 @@ const EventsTab = ({ user }) => {
     setEditingEventId(null);
   };
 
-  const handleEventEdit = (item) => {
-    setEditingEventId(item.id);
+  const handleEventEdit = (event) => {
+    setEditingEventId(event.id);
     setEventFormData({
-      name: item.name || '',
-      description: item.description || '',
-      longDescription: item.longDescription || '',
-      image: item.image || '',
-      galleryImages: item.galleryImages || [],
-      status: item.status || 'upcoming',
-      order: item.order || 0,
-      isActive: item.isActive !== false
+      name: event.name || '',
+      description: event.description || '',
+      longDescription: event.longDescription || '',
+      image: event.image || '',
+      galleryImages: event.galleryImages || [],
+      startDate: event.startDate || '',
+      endDate: event.endDate || '',
+      startTime: event.startTime || '',
+      endTime: event.endTime || '',
+      ctaUrl: event.ctaUrl || '',
+      ctaLabel: event.ctaLabel || 'register',
+      isActive: event.isActive !== false
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleEventDelete = async (item) => {
-    if (window.confirm("Are you sure you want to delete this event?")) {
-      try {
-        await deleteDoc(doc(db, 'events', item.id));
-        await deleteCloudinaryImage(item.image);
-        // Remove every gallery image from Cloudinary as well.
-        for (const url of item.galleryImages || []) {
-          await deleteCloudinaryImage(url);
-        }
-        await logAdminAction('DELETE', 'Event', `Deleted event: ${item.name}`);
-      } catch (error) {
-        console.error("Delete Error:", error);
-        alert("Failed to delete event.");
-      }
+  const handleEventDelete = async (event) => {
+    if (!window.confirm(`Delete ${event.name}? This also removes its Cloudinary images.`)) return;
+    try {
+      await deleteDoc(doc(db, 'events', event.id));
+      await deleteCloudinaryImage(event.image);
+      for (const url of event.galleryImages || []) await deleteCloudinaryImage(url);
+      await logAdminAction('DELETE', 'Event', `Deleted event: ${event.name}`);
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Failed to delete event.');
     }
   };
 
-  const handleEventSubmit = async (e) => {
-    e.preventDefault();
+  const handleRemoveGalleryImage = async (url) => {
+    setEventFormData((current) => ({ ...current, galleryImages: current.galleryImages.filter((image) => image !== url) }));
+    await deleteCloudinaryImage(url);
+  };
+
+  const handleEventSubmit = async (submitEvent) => {
+    submitEvent.preventDefault();
     if (!eventFormData.name || !eventFormData.image) {
-      alert("Name and Image are required.");
+      alert('Name and cover image are required.');
       return;
     }
+
+    const data = { ...eventFormData };
+    if (!data.endDate) {
+      if (!window.confirm("Are you sure you don't want to have an end date? It will be a one-day event.")) return;
+      data.endDate = data.startDate;
+    }
+
+    const scheduleError = validateEventSchedule(data);
+    if (scheduleError) {
+      alert(scheduleError);
+      return;
+    }
+    if (data.ctaUrl && !isExternalEventUrl(data.ctaUrl)) {
+      alert('Event links must begin with http:// or https://.');
+      return;
+    }
+
     const dataToSave = {
-      name: eventFormData.name,
-      description: eventFormData.description,
-      longDescription: eventFormData.longDescription,
-      image: eventFormData.image,
-      galleryImages: eventFormData.galleryImages || [],
-      status: eventFormData.status,
-      order: Number(eventFormData.order),
-      isActive: eventFormData.isActive,
+      ...data,
+      ctaUrl: data.ctaUrl.trim(),
       updatedAt: serverTimestamp(),
       updatedBy: user.email
     };
 
     try {
       if (editingEventId) {
-        const oldItem = events.find(s => s.id === editingEventId);
-        const imageChanged = !oldItem || oldItem.image !== eventFormData.image;
-        if (oldItem && oldItem.image && imageChanged) {
-          // Image replaced — remove the old asset from Cloudinary.
-          await deleteCloudinaryImage(oldItem.image);
-        } else if (!imageChanged) {
-          // Image kept — keep its Cloudinary folder in sync with the current
-          // name/status (this is what physically moves the file when an event
-          // is switched between Upcoming and Past). No-ops if already in place.
-          const safeName = eventFormData.name.trim().replace(/\s+/g, '-');
-          dataToSave.image = await moveCloudinaryImage(
-            eventFormData.image,
-            `events/${eventFormData.status}/${safeName}`
-          );
+        const oldEvent = events.find((event) => event.id === editingEventId);
+        if (oldEvent?.image && oldEvent.image !== dataToSave.image) {
+          await deleteCloudinaryImage(oldEvent.image);
+        } else if (oldEvent?.image) {
+          dataToSave.image = await moveCloudinaryImage(dataToSave.image, eventFolder());
         }
         await updateDoc(doc(db, 'events', editingEventId), dataToSave);
         await logAdminAction('UPDATE', 'Event', `Updated event: ${dataToSave.name}`);
@@ -200,35 +169,32 @@ const EventsTab = ({ user }) => {
       }
       resetEventForm();
     } catch (error) {
-      console.error("Save Error:", error);
-      alert("Failed to save event.");
+      console.error('Save error:', error);
+      alert('Failed to save event.');
     }
   };
 
-  const renderEventList = (status, title) => {
-    const list = events.filter(ev => (ev.status || 'upcoming') === status);
-    return (
-      <div className="team-category-section">
-        <h3 className="category-title">{title}</h3>
-        <div className="achievements-list">
-          {list.map((item) => (
-            <div key={item.id} className={`admin-achievement-card ${!item.isActive ? 'inactive-member' : ''}`}>
-              <div className="card-info">
-                <h3>{item.name} <span className={`status-badge ${item.isActive ? 'active' : 'inactive'}`}>{item.isActive ? 'Active' : 'Inactive'}</span></h3>
-                <span className="order-badge">Order: {item.order}</span>
-                {item.description && <p className="card-desc">{item.description}</p>}
-              </div>
-              <div className="card-actions">
-                <button onClick={() => handleEventEdit(item)} className="admin-btn edit small">Edit</button>
-                <button onClick={() => handleEventDelete(item)} className="admin-btn delete small">Delete</button>
-              </div>
+  const renderEventList = (eventsInGroup, title) => (
+    <div className="team-category-section">
+      <h3 className="category-title">{title}</h3>
+      <div className="achievements-list">
+        {eventsInGroup.map((event) => (
+          <div key={event.id} className={`admin-achievement-card ${!event.isActive ? 'inactive-member' : ''}`}>
+            <div className="card-info">
+              <h3>{event.name} <span className={`status-badge ${event.isActive ? 'active' : 'inactive'}`}>{event.isActive ? 'Active' : 'Inactive'}</span></h3>
+              <p className="card-desc">{event.startDate} to {event.endDate || event.startDate}</p>
+              {event.description && <p className="card-desc">{event.description}</p>}
             </div>
-          ))}
-          {!loading && list.length === 0 && <p className="empty-state">No {title.toLowerCase()} yet.</p>}
-        </div>
+            <div className="card-actions">
+              <button onClick={() => handleEventEdit(event)} className="admin-btn edit small">Edit</button>
+              <button onClick={() => handleEventDelete(event)} className="admin-btn delete small">Delete</button>
+            </div>
+          </div>
+        ))}
+        {!loading && eventsInGroup.length === 0 && <p className="empty-state">No {title.toLowerCase()} yet.</p>}
       </div>
-    );
-  };
+    </div>
+  );
 
   return (
     <div className="admin-grid">
@@ -237,155 +203,39 @@ const EventsTab = ({ user }) => {
           <h2>{editingEventId ? 'Edit Event' : 'Add New Event'}</h2>
           <form onSubmit={handleEventSubmit} className="admin-form">
             <div className="form-row">
-              <div className="form-group">
-                <label>Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={eventFormData.name}
-                  onChange={handleEventInputChange}
-                  required
-                  placeholder="e.g. VIT Gravitas Drone Race"
-                />
-              </div>
-              <div className="form-group">
-                <label>Status</label>
-                <select
-                  name="status"
-                  value={eventFormData.status}
-                  onChange={handleEventInputChange}
-                  required
-                >
-                  <option value="upcoming">Upcoming</option>
-                  <option value="past">Past</option>
-                </select>
-              </div>
+              <div className="form-group"><label>Name</label><input type="text" name="name" value={eventFormData.name} onChange={handleEventInputChange} required placeholder="e.g. VIT Gravitas Drone Race" /></div>
+              <div className="form-group"><label>Start Date</label><input type="date" name="startDate" value={eventFormData.startDate} onChange={handleEventInputChange} required /></div>
+              <div className="form-group"><label>End Date (optional)</label><input type="date" name="endDate" value={eventFormData.endDate} onChange={handleEventInputChange} min={eventFormData.startDate || undefined} /></div>
             </div>
-
-            <div className="form-group">
-              <label>Short Description (shown on the card)</label>
-              <textarea
-                name="description"
-                value={eventFormData.description}
-                onChange={handleEventInputChange}
-                rows="3"
-                placeholder="A short one-or-two line summary for the card…"
-              ></textarea>
+            <div className="form-row">
+              <div className="form-group"><label>Start Time (optional)</label><input type="time" name="startTime" value={eventFormData.startTime} onChange={handleEventInputChange} /></div>
+              <div className="form-group"><label>End Time (optional)</label><input type="time" name="endTime" value={eventFormData.endTime} onChange={handleEventInputChange} /></div>
             </div>
-
-            <div className="form-group">
-              <label>Long Description (shown in the detail popup)</label>
-              <textarea
-                name="longDescription"
-                value={eventFormData.longDescription}
-                onChange={handleEventInputChange}
-                rows="6"
-                placeholder="The full event write-up. Use a blank line to separate paragraphs. Leave empty to reuse the short description."
-              ></textarea>
+            <p className="form-hint">Leave both times blank for an all-day Event. If you add one time, you must add both. All dates and times use India time.</p>
+            <div className="form-group"><label>Short Description (shown on the card)</label><textarea name="description" value={eventFormData.description} onChange={handleEventInputChange} rows="3" /></div>
+            <div className="form-group"><label>Long Description (shown in the detail popup)</label><textarea name="longDescription" value={eventFormData.longDescription} onChange={handleEventInputChange} rows="6" placeholder="Use a blank line to separate paragraphs." /></div>
+            <div className="form-row">
+              <div className="form-group"><label>Event Link (optional)</label><input type="url" name="ctaUrl" value={eventFormData.ctaUrl} onChange={handleEventInputChange} placeholder="https://example.com/register" /></div>
+              <div className="form-group"><label>Link label</label><select name="ctaLabel" value={eventFormData.ctaLabel} onChange={handleEventInputChange} disabled={!eventFormData.ctaUrl}><option value="register">Register</option><option value="explore">Explore</option></select></div>
             </div>
-
-            <div className="form-group">
-              <label>Order</label>
-              <input
-                type="number"
-                name="order"
-                value={eventFormData.order}
-                onChange={handleEventInputChange}
-                required
-              />
-            </div>
-
             <div className="form-group">
               <label>Cover Image (shown on the card)</label>
-              <div className="file-upload">
-                <input
-                  type="file"
-                  accept="image/*,.heic,.heif"
-                  ref={eventFileInputRef}
-                  onChange={handleEventImageUpload}
-                  disabled={isUploading}
-                />
-                {isUploading && <span className="upload-status">Uploading…</span>}
-              </div>
+              <div className="file-upload"><input type="file" accept="image/*,.heic,.heif" ref={eventFileInputRef} onChange={(event) => uploadImages(Array.from(event.target.files || []), false)} disabled={isUploading} />{isUploading && <span className="upload-status">Uploading…</span>}</div>
               <div className="input-divider">or</div>
-              <input
-                type="text"
-                name="image"
-                value={eventFormData.image}
-                onChange={handleEventInputChange}
-                placeholder="Paste an image URL directly"
-                required
-              />
-              {eventFormData.image && (
-                <div className="image-preview achievement">
-                  <img src={eventFormData.image} alt="Preview" />
-                </div>
-              )}
+              <input type="text" name="image" value={eventFormData.image} onChange={handleEventInputChange} placeholder="Paste an image URL directly" required />
+              {eventFormData.image && <div className="image-preview achievement"><img src={eventFormData.image} alt="Preview" /></div>}
             </div>
-
             <div className="form-group">
               <label>Gallery Images (shown in the detail popup — you can pick multiple)</label>
-              <div className="file-upload">
-                <input
-                  type="file"
-                  accept="image/*,.heic,.heif"
-                  multiple
-                  ref={galleryFileInputRef}
-                  onChange={handleGalleryUpload}
-                  disabled={isUploading}
-                />
-                {isUploading && <span className="upload-status">Uploading…</span>}
-              </div>
-              {eventFormData.galleryImages && eventFormData.galleryImages.length > 0 && (
-                <div className="event-gallery-thumbs">
-                  {eventFormData.galleryImages.map((url) => (
-                    <div key={url} className="event-gallery-thumb">
-                      <img src={url} alt="Gallery" />
-                      <button
-                        type="button"
-                        className="event-gallery-remove"
-                        onClick={() => handleRemoveGalleryImage(url)}
-                        aria-label="Remove image"
-                      >×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="file-upload"><input type="file" accept="image/*,.heic,.heif" multiple ref={galleryFileInputRef} onChange={(event) => uploadImages(Array.from(event.target.files || []), true)} disabled={isUploading} /></div>
+              {eventFormData.galleryImages.length > 0 && <div className="event-gallery-thumbs">{eventFormData.galleryImages.map((url) => <div key={url} className="event-gallery-thumb"><img src={url} alt="Gallery" /><button type="button" className="event-gallery-remove" onClick={() => handleRemoveGalleryImage(url)} aria-label="Remove image">×</button></div>)}</div>}
             </div>
-
-            <div className="form-group checkbox-group">
-              <label>
-                <input
-                  type="checkbox"
-                  name="isActive"
-                  checked={eventFormData.isActive}
-                  onChange={handleEventInputChange}
-                />
-                Active (visible on website)
-              </label>
-            </div>
-
-            <div className="form-actions">
-              {editingEventId && (
-                <button type="button" onClick={resetEventForm} className="admin-btn cancel">
-                  Cancel
-                </button>
-              )}
-              <button type="submit" className="admin-btn primary">
-                {editingEventId ? 'Update Event' : 'Add Event'}
-              </button>
-            </div>
+            <div className="form-group checkbox-group"><label><input type="checkbox" name="isActive" checked={eventFormData.isActive} onChange={handleEventInputChange} /> Active (visible on website)</label></div>
+            <div className="form-actions">{editingEventId && <button type="button" onClick={resetEventForm} className="admin-btn cancel">Cancel</button>}<button type="submit" className="admin-btn primary">{editingEventId ? 'Update Event' : 'Add Event'}</button></div>
           </form>
         </div>
       </div>
-
-      <div className="admin-right-column">
-        <div className="admin-glass-panel list-panel">
-          <h2>Current Events</h2>
-          {renderEventList('upcoming', 'Upcoming Events')}
-          {renderEventList('past', 'Past Events')}
-        </div>
-      </div>
+      <div className="admin-right-column"><div className="admin-glass-panel list-panel"><h2>Current Events</h2>{renderEventList(groups.ongoing, 'Ongoing Events')}{renderEventList(groups.upcoming, 'Upcoming Events')}{renderEventList(groups.past, 'Past Events')}</div></div>
     </div>
   );
 };

@@ -1,9 +1,13 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
+import { Link } from 'react-router-dom';
 import { db } from '../firebase';
 import VariableProximity from '../components/VariableProximity';
 import ShinyText from '../components/ShinyText';
+import LogoLoop from '../components/LogoLoop';
 import Seo from '../components/Seo';
+import useEventNow from '../hooks/useEventNow';
+import { getHomepageEventAnnouncements } from '../lib/eventSchedule';
 import './Home.css';
 
 const DEFAULT_VIDEO = '/TRFPV_Assets/Teamvideo.mp4';
@@ -50,8 +54,10 @@ const Home = () => {
   const containerRef = useRef(null);
   const [videoSrc, setVideoSrc] = useState(DEFAULT_VIDEO);
   const [aboutText, setAboutText] = useState(DEFAULT_ABOUT);
+  const [events, setEvents] = useState([]);
   const [formData, setFormData] = useState(EMPTY_CONTACT_FORM);
   const [status, setStatus] = useState({ loading: false, success: false, error: '' });
+  const now = useEventNow();
 
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'settings', 'home'), (docSnap) => {
@@ -67,6 +73,15 @@ const Home = () => {
       console.error("Error fetching home settings:", error);
     });
 
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'events'), (snapshot) => {
+      setEvents(snapshot.docs.map((eventDoc) => ({ id: eventDoc.id, ...eventDoc.data() })));
+    }, (error) => {
+      console.error('Error fetching homepage events:', error);
+    });
     return () => unsubscribe();
   }, []);
 
@@ -123,6 +138,20 @@ const Home = () => {
     }
   };
 
+  const tickerItems = useMemo(() => getHomepageEventAnnouncements(events, now).map((announcement) => {
+    if (announcement.type === 'ongoing') {
+      return {
+        ariaLabel: `Ongoing event: ${announcement.event.name}. View event details.`,
+        node: <Link to={`/events?event=${encodeURIComponent(announcement.event.id)}`} className="home-event-ticker-link ongoing"><strong>ONGOING</strong><span>{announcement.event.name}</span><em>View event</em></Link>
+      };
+    }
+
+    return {
+      ariaLabel: `${announcement.callToAction.label}: ${announcement.event.name}`,
+      node: <a href={announcement.callToAction.url} target="_blank" rel="noopener noreferrer" className="home-event-ticker-link"><strong>{announcement.callToAction.label.toUpperCase()}</strong><span>{announcement.event.name}</span></a>
+    };
+  }), [events, now]);
+
   return (
     <>
       <Seo description="Team RotorFPV is VIT's premier FPV drone racing and engineering team — we design, build, and fly high-performance racing drones and compete nationally and internationally." />
@@ -133,6 +162,21 @@ const Home = () => {
           </video>
           <div className="video-overlay"></div>
         </div>
+
+        {tickerItems.length > 0 && (
+          <div className="home-event-ticker">
+            <LogoLoop
+              logos={tickerItems}
+              speed={55}
+              direction="left"
+              logoHeight={36}
+              gap={38}
+              hoverSpeed={0}
+              ariaLabel="Current Team RotorFPV events"
+              renderItem={(item) => item.node}
+            />
+          </div>
+        )}
 
         <div className="hero-content">
           <h1 className="brand-font hero-quote">
