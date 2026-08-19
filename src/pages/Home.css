@@ -395,7 +395,7 @@
 
 @media screen and (max-width: 768px) {
   .home-event-ticker {
-    top: 88px;
+    top: calc(120px + env(safe-area-inset-top, 0px));
   }
 
   .home-event-ticker-link {
