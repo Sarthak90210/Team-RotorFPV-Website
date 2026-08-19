@@ -124,17 +124,18 @@ const Board = () => {
       const rawMembers = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.isActive !== false);
       const userIds = [...new Set(rawMembers.map(m => m.userId).filter(Boolean))];
 
-      // Fetch all referenced users
-      const usersMap = {};
+      // Fetch public Board Profiles. User records remain private because they
+      // can include registration and permission data unrelated to the Board.
+      const profilesMap = {};
       try {
-        const userDocs = await Promise.all(userIds.map(id => getDoc(doc(db, 'users', id))));
-        userDocs.forEach(d => {
+        const profileDocs = await Promise.all(userIds.map(id => getDoc(doc(db, 'public_board_profiles', id))));
+        profileDocs.forEach(d => {
           if (d.exists()) {
-            usersMap[d.id] = d.data();
+            profilesMap[d.id] = d.data();
           }
         });
       } catch (err) {
-        console.error("Error fetching users for board:", err);
+        console.error("Error fetching public Board Profiles:", err);
       }
 
       const newTeamData = {};
@@ -148,15 +149,16 @@ const Board = () => {
         let category = data.category || 'leaders';
         if (category === 'miscellaneous') category = 'essential';
         
-        // Merge user data
-        const userData = usersMap[data.userId] || {};
+        // Merge the public Board Profile with this Board-year membership.
+        const profileData = profilesMap[data.userId] || {};
         const mergedMember = {
           ...data,
-          name: userData.name || data.name || 'Unknown',
-          image: userData.image || data.image || '',
-          linkedin: userData.linkedin || data.linkedin || '',
-          github: userData.github || data.github || '',
-          jobTitle: userData.jobTitle || data.jobTitle || ''
+          name: profileData.name || data.name || 'Unknown',
+          image: profileData.image || data.image || '',
+          role: profileData.role || data.role || '',
+          linkedin: profileData.linkedin || data.linkedin || '',
+          github: profileData.github || data.github || '',
+          jobTitle: data.jobTitle || ''
         };
 
         if (newTeamData[year][category]) {

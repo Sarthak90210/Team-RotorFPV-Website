@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, getDocs, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { logAdminAction, fetchAdmins, apiPost, uploadFile, syncUserPermissions } from '../../lib/adminApi';
-import { expandTagIds, getGrantedTagIds } from '../../lib/tagGrants';
+import { expandTagIds, getGrantedTagIds, buildReadableMirrors } from '../../lib/tagGrants';
 import TagsTab from './TagsTab';
 import CustomFieldsTab from './CustomFieldsTab';
 import PillNav from '../PillNav';
@@ -83,11 +83,15 @@ const TeamMembersTab = ({ user }) => {
 
     try {
       const email = formData.email.trim().toLowerCase();
-      
+
+      const expandedTags = expandTagIds(formData.tags, tags);
+      const { tagNames, customFieldsReadable } = buildReadableMirrors(expandedTags, tags, formData.customFields, customFields);
       const payload = {
         email,
-        tags: expandTagIds(formData.tags, tags),
+        tags: expandedTags,
+        tagNames,
         customFields: formData.customFields,
+        customFieldsReadable,
       };
 
       const isNew = editingEmail === '__new__';

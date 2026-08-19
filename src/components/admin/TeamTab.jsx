@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, deleteDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { uploadFile, deleteCloudinaryImage, logAdminAction, syncUserPermissions, fetchAdmins } from '../../lib/adminApi';
-import { getGrantedTagIds } from '../../lib/tagGrants';
+import { getGrantedTagIds, buildReadableMirrors } from '../../lib/tagGrants';
 import { getDocs, getDoc } from 'firebase/firestore';
 
 const formatBoardYear = (year) => {
@@ -41,6 +41,20 @@ const TeamTab = () => {
     } catch (e) {
       console.error("Error fetching admins:", e);
     }
+  };
+
+  const syncPublicBoardProfile = async (userId, role) => {
+    const user = usersList.find((candidate) => candidate.id === userId);
+    if (!user) return;
+
+    await setDoc(doc(db, 'public_board_profiles', userId), {
+      name: user.name || '',
+      image: user.image || '',
+      role: role || '',
+      linkedin: user.linkedin || '',
+      github: user.github || '',
+      updatedAt: serverTimestamp()
+    }, { merge: true });
   };
 
   useEffect(() => {
@@ -175,7 +189,7 @@ const TeamTab = () => {
               const uData = userDocSnap.data();
               const newTags = activeBoardUserIds.has(m.userId) ? (uData.tags || []) : [];
               if (newTags.length !== (uData.tags || []).length) {
-                await updateDoc(doc(db, 'users', m.userId), { tags: newTags });
+                await updateDoc(doc(db, 'users', m.userId), { tags: newTags, tagNames: buildReadableMirrors(newTags, currentTags).tagNames });
                 if (uData.email) {
                   await syncUserPermissions(uData.email, newTags, currentTags, currentAdmins);
                 }
@@ -254,7 +268,7 @@ const TeamTab = () => {
             const boardTag = tagsList.find(t => t.name === 'Board');
             if (boardTag && userData.tags?.includes(boardTag.id)) {
               const newTags = userData.tags.filter(t => t !== boardTag.id);
-              await updateDoc(doc(db, 'users', member.userId), { tags: newTags });
+              await updateDoc(doc(db, 'users', member.userId), { tags: newTags, tagNames: buildReadableMirrors(newTags, tagsList).tagNames });
               if (userData.email) {
                 await syncUserPermissions(userData.email, newTags, tagsList, adminsList);
               }
@@ -374,7 +388,7 @@ const TeamTab = () => {
                   || newTags.some(tagId => !(uData.tags || []).includes(tagId));
                 
                 if (tagsChanged) {
-                  await updateDoc(doc(db, 'users', m.userId), { tags: newTags });
+                  await updateDoc(doc(db, 'users', m.userId), { tags: newTags, tagNames: buildReadableMirrors(newTags, currentTags).tagNames });
                 }
                 // Repair permissions even when the Board tag was already
                 // present but an earlier partial transition skipped the claim.
@@ -407,7 +421,7 @@ const TeamTab = () => {
               || newTags.some(tagId => !(uData.tags || []).includes(tagId));
             
             if (tagsChanged) {
-              await updateDoc(doc(db, 'users', m.userId), { tags: newTags });
+              await updateDoc(doc(db, 'users', m.userId), { tags: newTags, tagNames: buildReadableMirrors(newTags, currentTags).tagNames });
             }
             // The tag can predate a failed permission update, so reconcile
             // every current-board member, even when their tags are unchanged.
@@ -456,7 +470,7 @@ const TeamTab = () => {
             ])];
           }
 
-          await updateDoc(doc(db, 'users', userId), { tags: newTags });
+          await updateDoc(doc(db, 'users', userId), { tags: newTags, tagNames: buildReadableMirrors(newTags, currentTags).tagNames });
           if (uData.email) {
             await syncUserPermissions(uData.email, newTags, currentTags, currentAdmins);
           }
@@ -525,6 +539,8 @@ const TeamTab = () => {
         await logAdminAction('CREATE', 'TeamMember', `Added team member record for ${dataToSave.userId}`);
       }
 
+      await syncPublicBoardProfile(dataToSave.userId, dataToSave.role);
+
       // Automate tags if this board is the Current Board
       // Read the year directly so a member added immediately after creating a
       // year still receives the Board tag and its super-admin permission.
@@ -547,7 +563,7 @@ const TeamTab = () => {
           const tagsChanged = newTags.length !== (uData.tags || []).length
             || newTags.some(tagId => !(uData.tags || []).includes(tagId));
           if (tagsChanged) {
-            await updateDoc(doc(db, 'users', dataToSave.userId), { tags: newTags });
+            await updateDoc(doc(db, 'users', dataToSave.userId), { tags: newTags, tagNames: buildReadableMirrors(newTags, updatedTagsList).tagNames });
           }
           if (uData.email) {
             await syncUserPermissions(uData.email, newTags, updatedTagsList, currentAdmins);

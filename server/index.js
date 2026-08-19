@@ -928,9 +928,34 @@ app.get('/api/logs', verifySuperAdmin, async (req, res) => {
 
 // ── Verification & Onboarding Endpoints ──
 
+// Build human-readable mirror fields so the raw Firestore user document is
+// legible in the Firebase console. `tags` is stored as an array of tag document
+// IDs and `customFields` is keyed by custom-field document IDs — both look like
+// random strings in the console. These mirrors (`tagNames`, `customFieldsReadable`)
+// are for readability only; the app always reads the ID-based `tags`/`customFields`
+// as the source of truth, so a rename may leave a mirror briefly stale without any
+// functional impact.
+async function buildReadableMirrors(tagIds = [], customFieldsMap = {}) {
+  const [tagsSnap, fieldsSnap] = await Promise.all([
+    db.collection('tags').get(),
+    db.collection('custom_fields').get(),
+  ]);
+  const tagNameById = {};
+  tagsSnap.forEach(d => { tagNameById[d.id] = d.data().name; });
+  const fieldNameById = {};
+  fieldsSnap.forEach(d => { fieldNameById[d.id] = d.data().name; });
+
+  const tagNames = (tagIds || []).map(id => tagNameById[id]).filter(Boolean);
+  const customFieldsReadable = {};
+  for (const [fieldId, value] of Object.entries(customFieldsMap || {})) {
+    customFieldsReadable[fieldNameById[fieldId] || fieldId] = value;
+  }
+  return { tagNames, customFieldsReadable };
+}
+
 app.post('/api/admin/requests/approve', verifySuperAdmin, async (req, res) => {
   try {
-    const { requestId, email, name, registrationNumber, tags, customFields } = req.body;
+    const { requestId, email, name, tags, customFields } = req.body;
     
     // Update request status to approved_unverified
     await db.collection('join_requests').doc(requestId).update({ status: 'approved_unverified' });
@@ -949,18 +974,22 @@ app.post('/api/admin/requests/approve', verifySuperAdmin, async (req, res) => {
       }
     }
 
+    // Readable mirrors so the raw Firestore doc is legible in the console.
+    const { tagNames, customFieldsReadable } = await buildReadableMirrors(tags || [], customFields || {});
+
     // Provision user with status active=false (unless already active)
     await userRef.set({
       email: email.toLowerCase(),
       name: name || '',
-      registrationNumber: registrationNumber || '',
       jobTitle: '',
       linkedin: '',
       github: '',
       roomNumber: '',
       image: '',
       tags: tags || [],
+      tagNames,
       customFields: customFields || {},
+      customFieldsReadable,
       status: statusToSet,
       emailVerified: emailVerifiedToSet
     }, { merge: true });
@@ -1019,6 +1048,9 @@ app.post('/api/admin/users/create', verifySuperAdmin, async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
+    // Readable mirrors so the raw Firestore doc is legible in the console.
+    const { tagNames, customFieldsReadable } = await buildReadableMirrors(tags || [], customFields || {});
+
     // Provision user with status active=false
     await userRef.set({
       email: email.toLowerCase(),
@@ -1029,7 +1061,9 @@ app.post('/api/admin/users/create', verifySuperAdmin, async (req, res) => {
       roomNumber: '',
       image: '',
       tags: tags || [],
+      tagNames,
       customFields: customFields || {},
+      customFieldsReadable,
       status: 'approved_unverified',
       emailVerified: false
     }, { merge: true });

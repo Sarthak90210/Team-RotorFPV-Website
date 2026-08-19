@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot, updateDoc, setDoc, collection, query, orderBy, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { logAdminAction, uploadFile, fetchAdmins, syncUserPermissions, apiPost } from '../../lib/adminApi';
-import { expandTagIds, getGrantedTagIds } from '../../lib/tagGrants';
+import { expandTagIds, getGrantedTagIds, buildReadableMirrors } from '../../lib/tagGrants';
 
 const ProfileTab = ({ user }) => {
   const [loading, setLoading] = useState(true);
@@ -188,12 +188,14 @@ const ProfileTab = ({ user }) => {
         github: formData.github.trim(),
         image: formData.image.trim(),
         customFields: formData.customFields,
-        email: userEmail, 
+        customFieldsReadable: buildReadableMirrors([], allTags, formData.customFields, customFields).customFieldsReadable,
+        email: userEmail,
         updatedAt: new Date().toISOString(),
       };
 
       if (user.isSuperAdmin) {
         payload.tags = expandTagIds(formData.tags || [], allTags);
+        payload.tagNames = buildReadableMirrors(payload.tags, allTags, {}, customFields).tagNames;
       }
 
       const docRef = doc(db, 'users', userEmail);
